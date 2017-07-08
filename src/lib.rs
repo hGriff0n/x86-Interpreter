@@ -10,6 +10,7 @@ mod inter;
 mod view;
 
 use std::fs::File;
+use std::io::prelude::*;
 
 // Pass on the `interpret_code` function to Rust programs
 pub use x86::interpret_code;
