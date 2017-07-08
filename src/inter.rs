@@ -56,6 +56,8 @@ pub fn collect_labels(code: &mut Vec<Code>, emu: &mut Emulator) {
     }
 }
 
+#[allow(unreachable_code)]
+#[allow(unused_variables)]
 fn run_no_arg(mne: &str, emu: &mut Emulator) {
     match mne {
         "cwtl" => panic!("Unimplemented instruction: `cwtl`"),
@@ -481,7 +483,7 @@ fn run_one_arg(mne: &str, arg: &Argument, emu: &mut Emulator) {
             if emu.getFlag(Flag::Zero) || emu.getFlag(Flag::Carry) {
                 do_jump(emu, arg)
             },
-        "call" => panic!("Unimplemented instruction: `call`"),,
+        "call" => panic!("Unimplemented instruction: `call`"),
         _ => panic!("Unknown instruction")
     }
 
@@ -662,6 +664,7 @@ fn do_jump(emu: &mut Emulator, arg: &Argument) {
             let pc = emu.getPC();
             emu.setPC(pc - 1);
         },
+        // TODO: Be sure to divide the result by 4 (or whatever)
         &Argument::Reg(_) => panic!("TODO: Add in register jump addressing"),
         &Argument::Mem(_, _, _, _) => panic!("TODO: Add in memory jump addressing"),
         _ => println!("Found something else")
