@@ -5,8 +5,12 @@ use nom::IResult;
 use ximpl::{Code, Command};
 
 pub fn interpret_code(code_str: &str) {
+    interpret_iter(code_str.split("\n").map(|s| s.to_owned()));
+}
+
+pub fn interpret_iter<I: Iterator<Item=String>>(code_iter: I) {
     // Perform initial splitting of code
-    let mut code = first_parse(code_str.to_string());
+    let mut code = first_parse(code_iter);
 
     // Initialize registers and other assembly resources
     let mut emu = emu::Emulator::new();
@@ -41,11 +45,10 @@ fn fetch<'a>(code: &'a mut Vec<Code>, pc: usize) -> Option<&'a Code> {
     code.get(pc)
 }
 
-// Perform initial splitting/organization of the input string
-fn first_parse(code_str: String) -> Vec<Code> {
-    let mut ret = code_str.split("\n")
-                          .map(|s| Code::Unread(s.to_string()))
-                          .collect::<Vec<_>>();
+// Perform initial organization of the input
+fn first_parse<I: Iterator<Item=String>>(code_iter: I) -> Vec<Code> {
+    let mut ret = code_iter.map(|s| Code::Unread(s))
+                           .collect::<Vec<_>>();
 
     // Add an instruction at the end to avoid indexing issues
     // Not necessary, but removing this will break `collect_labels`

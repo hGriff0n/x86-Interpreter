@@ -12,7 +12,7 @@ use std::io;
 use std::vec::Vec;
 
 // TODO: Add in command line interfacing ???
-// TODO: Abstract `interpret_code` to work off of Iterators
+// TODO: Look at returning success status from ffi functions
 // TODO: Add in rust tests
 // TODO: Implement complete x86 instruction set
 // TODO: Improve the register interaction framework
@@ -39,8 +39,6 @@ fn read_multiline() -> Option<String> {
     let input = io::stdin();
     let mut in_strs = Vec::new();
     let mut in_str = String::new();
-
-    use std::result::Result;
 
     if let Ok(_) = input.read_line(&mut in_str) {
         if in_str.trim() != ":q" {
