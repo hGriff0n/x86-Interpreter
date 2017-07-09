@@ -27,7 +27,7 @@ fn main() {
     loop {
         match read_multiline() {
             Some(ref s) => {
-                x86::interpret_code(s)
+                x86::interpret_code(s);
                 println!("");   
             },
             None => break,
