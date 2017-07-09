@@ -65,6 +65,8 @@ fn run_no_arg(mne: &str, emu: &mut Emulator) {
         "cqto" => panic!("Unimplemented instruction: `cqto`"),
         "leave" => panic!("Unimplemented instruction: `leave`"),
         "ret" => panic!("Unimplemented instruction: `ret`"),
+        "exit" => emu.exit(),
+        "dump" => emu.dump_all(),
         _ => panic!("Unknown instruction")
     }
 

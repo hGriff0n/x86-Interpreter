@@ -30,13 +30,14 @@ impl Emulator {
                 pc: 0,
                 mem: [0 as u8; MEM_SIZE],
                 jumps: HashMap::new(),
+                exit_flag: false,
             }
         }
     }
 
     // TODO: Look into changing the interface (switch String with Argument)
     pub fn getReg(&mut self, reg: &str) -> Memory {
-        let mut reg: &mut [u8] = match reg {
+        Memory::new(&mut self.eflags, match reg {
             // Access the 32bit Memorys
             "eax" => &mut self.eax[0..4],
             "ecx" => &mut self.ecx[0..4],
@@ -78,9 +79,7 @@ impl Emulator {
             "bpl" => &mut self.ebp[0..1],
 
             _ => panic!("Attempt to use unsupported registers")
-        };
-
-        Memory::new(&mut self.eflags, reg)
+        })
     }
 
     // 'getReg' type functions that work on the memory tape
@@ -99,6 +98,15 @@ impl Emulator {
     }
     pub fn setFlag(&mut self, flag: ximpl::Flag, val: bool) {
         self.eflags.set(ximpl::mask_shift(flag), val)
+    }
+
+    
+    // Allow for exiting evaluation at any time
+    pub fn exit(&mut self) {
+        self.exit_flag = true;
+    }    
+    pub fn run(&self) -> bool {
+        !self.exit_flag
     }
 
 
@@ -157,6 +165,11 @@ impl Emulator {
         }
     }
 
+    pub fn dump_all(&self) {
+        self.dumpRegisters();
+        self.dumpLabels();
+    }
+
     // TODO: Add in function to dump contents of used tape
 }
 
@@ -168,5 +181,6 @@ pub struct Emulator {
     mem: [u8; MEM_SIZE],
 
     pc: usize,
+    exit_flag: bool,
     jumps: HashMap<String, usize>
 }

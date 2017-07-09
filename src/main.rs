@@ -11,7 +11,6 @@ mod x86;
 use std::io;
 use std::vec::Vec;
 
-// TODO: Add in "instruction" to immediately exit execution
 // TODO: Add in command line interfacing ???
 // TODO: Abstract `interpret_code` to work off of Iterators
 // TODO: Add in rust tests
@@ -20,6 +19,7 @@ use std::vec::Vec;
     // TODO: Figure out how to work with unsigned types
     // TODO: Improve the error messages on sizing misalignment
 // TODO: Work on displaying of register/memory dumps
+    // Add in finer grain control of memory dumps from x86 "special" instructions
     // ie. When do they get displayed/allow for control of display
 // TODO: Add in parsing of non-AT&T assembly syntax
 

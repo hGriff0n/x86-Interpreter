@@ -13,7 +13,7 @@ pub fn interpret_code(code_str: &str) {
     inter::collect_labels(&mut code, &mut emu);
 
     // Run the interpretation loop
-    loop {
+    while emu.run() {
         match fetch(&mut code, emu.getPC()) {
             Some(&Code::Parsed(ref inst)) => inter::dispatch(inst, &mut emu),
             _ => break
@@ -34,9 +34,8 @@ fn fetch<'a>(code: &'a mut Vec<Code>, pc: usize) -> Option<&'a Code> {
         _ => Code::EndProgram
     };
 
-    match res {
-        Code::Parsed(line) => code[pc] = Code::Parsed(line),
-        _ => ()
+    if let Code::Parsed(line) = res {
+        code[pc] = Code::Parsed(line);
     }
 
     code.get(pc)

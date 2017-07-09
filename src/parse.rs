@@ -21,7 +21,7 @@ pub fn label(input: &str) -> IResult<&[u8], Command> {
 
 // Parser implementation
 named!(_x86_instruction<Command>, ws!(alt!(
-    directive | _label | no_arg_inst | one_arg_inst | two_arg_inst
+    directive | no_arg_inst | one_arg_inst | two_arg_inst | _label
 )));
 named!(directive<Command>, ws!(
     do_parse!(
@@ -152,7 +152,8 @@ named!(no_arg_mnemonic<&str>, map_res!(
     alt!(
         tag!("cwtl") | tag!("cltq") |
         tag!("cqto") | tag!("leave") |
-        tag!("ret")
+        tag!("ret") | tag!("exit") |
+        tag!("dump")
     ), str::from_utf8
 ));
 named!(register<Argument>, do_parse!(
