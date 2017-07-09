@@ -10,4 +10,4 @@ libc = "0.2.24"
 
 [lib]
 name = "x86_interpreter"
-crate-type = ["dylib"]
+crate-type = ["staticlib"]
