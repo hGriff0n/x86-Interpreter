@@ -77,8 +77,36 @@ fn run_one_arg(mne: &str, arg: &Argument, emu: &mut Emulator) {
     use self::Argument::*;
 
     match mne {
-        "push" => panic!("Unimplemented instruction: `push`"),
-        "pop" => panic!("Unimplemented instruction: `pop`"),
+        "push" => {
+            let esp = emu.getReg("esp").get();
+            let val = get_value(emu, arg);
+            emu.getMemorySized(esp, -4).set(val);
+
+            let mut esp = emu.getReg("esp");
+            esp -= 4;
+        },
+        "pop" => {
+            let esp = {
+                let mut esp = emu.getReg("esp");
+                esp += 4;
+                esp.get()
+            };
+
+            let val = emu.getMemorySized(esp, -4).get();
+
+            match arg {
+                &Reg(ref r) => {
+                    let mut reg = emu.getReg(r);
+                    reg.set(val);
+                },
+                &Mem(ref base, off, _, _) => {
+                    let base = get_value(emu, &base);
+                    let mut m = emu.getMemory(base + off);
+                    m.set(val);
+                },
+                _ => panic!("Unsupported operation")
+            }
+        },
         "inc" => {
             match arg {
                 &Reg(ref r) => {

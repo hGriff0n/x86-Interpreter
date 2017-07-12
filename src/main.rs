@@ -11,10 +11,10 @@ mod x86;
 use std::io;
 use std::vec::Vec;
 
-// TODO: Add in command line interfacing ???
-// TODO: Look at returning success status from ffi functions
-// TODO: Add in rust tests
+// TODO: Implement cpu flag handling correctly
+// TODO: Move from panics to Results (make ffi exception-safe)
 // TODO: Implement complete x86 instruction set
+// TODO: Add in command line interfacing ???
 // TODO: Improve the register interaction framework
     // TODO: Figure out how to work with unsigned types
     // TODO: Improve the error messages on sizing misalignment
@@ -22,6 +22,7 @@ use std::vec::Vec;
     // Add in finer grain control of memory dumps from x86 "special" instructions
     // ie. When do they get displayed/allow for control of display
 // TODO: Add in parsing of non-AT&T assembly syntax
+// TODO: Add in rust tests
 
 fn main() {
     loop {

@@ -86,9 +86,8 @@ impl Emulator {
     pub fn getMemory(&mut self, loc: i32) -> Memory {
         self.getMemorySized(loc, 4)
     }
-    pub fn getMemorySized(&mut self, loc: i32, len: usize) -> Memory {
-        let loc = loc as usize;
-        let end = loc + len;
+    pub fn getMemorySized(&mut self, loc: i32, len: i32) -> Memory {
+        let (loc, end) = min_max(loc as usize, (loc + len) as usize);
         Memory::new(&mut self.eflags, &mut self.mem[loc..end])
     }
 
@@ -171,6 +170,14 @@ impl Emulator {
     }
 
     // TODO: Add in function to dump contents of used tape
+}
+
+fn min_max(loc: usize, end: usize) -> (usize, usize) {
+    if loc > end {
+        (end, loc)
+    } else {
+        (loc, end)
+    }
 }
 
 pub struct Emulator {

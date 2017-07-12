@@ -45,7 +45,7 @@ fn fetch<'a>(code: &'a mut Vec<Code>, pc: usize) -> Option<&'a Code> {
     code.get(pc)
 }
 
-// Perform initial organization of the input
+// Perform initial organization of the input string
 fn first_parse<I: Iterator<Item=String>>(code_iter: I) -> Vec<Code> {
     let mut ret = code_iter.map(|s| Code::Unread(s))
                            .collect::<Vec<_>>();
