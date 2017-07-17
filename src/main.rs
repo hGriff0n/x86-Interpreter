@@ -11,9 +11,12 @@ mod x86;
 use std::io;
 use std::vec::Vec;
 
-// TODO: Implement cpu flag handling correctly
+// TODO: Ensure all implemented instructions handle cpu flags
+    // Look into whether the current approach is "good"
+// TODO: Implement `test` and `cmp` instructions
 // TODO: Move from panics to Results (make ffi exception-safe)
-// TODO: Implement complete x86 instruction set
+// TODO: Implement complete x86 instructions
+    // Move over to implementing from the other sheet though
 // TODO: Add in command line interfacing ???
 // TODO: Improve the register interaction framework
     // TODO: Figure out how to work with unsigned types

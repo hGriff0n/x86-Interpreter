@@ -22,7 +22,7 @@ impl Emulator {
                 edx: [0;4],
                 ebx: mem::transmute(2138112 as u32),
                 esp: mem::transmute(MEM_SIZE as u32 - 4),
-                ebp: mem::transmute(6356884 as u32),
+                ebp: mem::transmute(MEM_SIZE as u32 - 4),
                 esi: mem::transmute(4199136 as u32),
                 edi: mem::transmute(4199136 as u32),
                 eflags: BitVec::with_capacity(32),
