@@ -34,6 +34,7 @@ pub fn interpret_iter<I: Iterator<Item=String>>(code_iter: I) {
 // Grab and decode the next instruction
 fn fetch<'a>(code: &'a mut Vec<Code>, pc: usize) -> Option<&'a Code> {
     let res = match code.get(pc) {
+        Some(&Code::Unread(ref line)) if line.trim() == "" => Code::Parsed(Command::NOP),
         Some(&Code::Unread(ref line)) => Code::Parsed(second_parse(line)),
         _ => Code::EndProgram
     };
