@@ -62,6 +62,6 @@ fn first_parse<I: Iterator<Item=String>>(code_iter: I) -> Vec<Code> {
 fn second_parse(inst_str: &str) -> Command {
     match parse::x86_instruction(inst_str) {
         IResult::Done(_, res) => res,
-        _ => panic!("Invalid x86 instruction string")
+        _ => panic!(format!("Invalid x86 instruction string: {}", inst_str))
     }
 }
