@@ -36,50 +36,55 @@ impl Emulator {
     }
 
     // TODO: Look into changing the interface (switch String with Argument)
-    pub fn getReg(&mut self, reg: &str) -> Memory {
-        Memory::new(&mut self.eflags, match reg {
+    pub fn getReg(&mut self, reg: &str) -> Result<Memory, String> {
+        let reg = match reg {
             // Access the 32bit Memorys
-            "eax" => &mut self.eax[0..4],
-            "ecx" => &mut self.ecx[0..4],
-            "edx" => &mut self.edx[0..4],
-            "ebx" => &mut self.ebx[0..4],
-            "esp" => &mut self.esp[0..4],
-            "ebp" => &mut self.ebp[0..4],
-            "esi" => &mut self.esi[0..4],
-            "edi" => &mut self.edi[0..4],
+            "eax" => Ok(&mut self.eax[0..4]),
+            "ecx" => Ok(&mut self.ecx[0..4]),
+            "edx" => Ok(&mut self.edx[0..4]),
+            "ebx" => Ok(&mut self.ebx[0..4]),
+            "esp" => Ok(&mut self.esp[0..4]),
+            "ebp" => Ok(&mut self.ebp[0..4]),
+            "esi" => Ok(&mut self.esi[0..4]),
+            "edi" => Ok(&mut self.edi[0..4]),
             // There's apparently more than this
             // rXXd, rXXw, rXXb
 
             // Access the 16bit Memorys
-            "ax" => &mut self.eax[0..2],
-            "cx" => &mut self.ecx[0..2],
-            "dx" => &mut self.edx[0..2],
-            "bx" => &mut self.ebx[0..2],
-            "si" => &mut self.esi[0..2],
-            "di" => &mut self.edi[0..2],
-            "sp" => &mut self.esp[0..2],
-            "bp" => &mut self.ebp[0..2],
+            "ax" => Ok(&mut self.eax[0..2]),
+            "cx" => Ok(&mut self.ecx[0..2]),
+            "dx" => Ok(&mut self.edx[0..2]),
+            "bx" => Ok(&mut self.ebx[0..2]),
+            "si" => Ok(&mut self.esi[0..2]),
+            "di" => Ok(&mut self.edi[0..2]),
+            "sp" => Ok(&mut self.esp[0..2]),
+            "bp" => Ok(&mut self.ebp[0..2]),
 
             // Access the 8bit Memorys
-            "ah" => &mut self.eax[1..2],
-            "al" => &mut self.eax[0..1],
-            "ch" => &mut self.ecx[1..2],
-            "cl" => &mut self.ecx[0..1],
-            "dh" => &mut self.edx[1..2],
-            "dl" => &mut self.edx[0..1],
-            "bh" => &mut self.ebx[1..2],
-            "bl" => &mut self.ebx[0..1],
-            "sih" => &mut self.esi[1..2],
-            "sil" => &mut self.esi[0..1],
-            "dih" => &mut self.edi[1..2],
-            "dil" => &mut self.edi[0..1],
-            "sph" => &mut self.esp[1..2],
-            "spl" => &mut self.esp[0..1],
-            "bph" => &mut self.ebp[1..2],
-            "bpl" => &mut self.ebp[0..1],
+            "ah" => Ok(&mut self.eax[1..2]),
+            "al" => Ok(&mut self.eax[0..1]),
+            "ch" => Ok(&mut self.ecx[1..2]),
+            "cl" => Ok(&mut self.ecx[0..1]),
+            "dh" => Ok(&mut self.edx[1..2]),
+            "dl" => Ok(&mut self.edx[0..1]),
+            "bh" => Ok(&mut self.ebx[1..2]),
+            "bl" => Ok(&mut self.ebx[0..1]),
+            "sih" => Ok(&mut self.esi[1..2]),
+            "sil" => Ok(&mut self.esi[0..1]),
+            "dih" => Ok(&mut self.edi[1..2]),
+            "dil" => Ok(&mut self.edi[0..1]),
+            "sph" => Ok(&mut self.esp[1..2]),
+            "spl" => Ok(&mut self.esp[0..1]),
+            "bph" => Ok(&mut self.ebp[1..2]),
+            "bpl" => Ok(&mut self.ebp[0..1]),
 
-            _ => panic!("Attempt to use unsupported registers")
-        })
+            _ => Err("Attempt to use unsupported registers".to_owned())
+        };
+
+        match reg {
+            Ok(reg) => Ok(Memory::new(&mut self.eflags, reg)),
+            Err(e) => Err(e)
+        }
     }
 
     // 'getReg' type functions that work on the memory tape
@@ -97,6 +102,9 @@ impl Emulator {
     }
     pub fn setFlag(&mut self, flag: ximpl::Flag, val: bool) {
         self.eflags.set(ximpl::mask_shift(flag), val)
+    }
+    pub fn clearFlags(&mut self) {
+        self.eflags.clear()
     }
 
     

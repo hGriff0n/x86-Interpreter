@@ -65,5 +65,21 @@ fn read_multiline() -> Option<String> {
         }
     }
 
+    /*
+     if in_str.trim() != ":q" {
+         in_strs.push(in_str.trim());
+
+         loop {
+             match input.read_line(&mut in_str) {
+                 Ok(_) => {
+                     ...
+                     in_strs.push(in_str.trim());
+                 },
+                 ...
+             }
+         }
+     }
+     */
+
     if in_strs.len() == 0 { None } else { Some(in_strs.join("\n")) }
 }

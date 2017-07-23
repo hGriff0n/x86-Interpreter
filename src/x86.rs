@@ -18,8 +18,15 @@ pub fn interpret_iter<I: Iterator<Item=String>>(code_iter: I) {
 
     // Run the interpretation loop
     while emu.run() {
+
+        // I'm not sure why, but 'rustc' flags this section as forgetting to use 'Result', which it does
+        #![allow(unused_must_use)]
         match fetch(&mut code, emu.getPC()) {
-            Some(&Code::Parsed(ref inst)) => inter::dispatch(inst, &mut emu),
+            Ok(Some(&Code::Parsed(ref inst))) => inter::dispatch(inst, &mut emu),
+            Err(e) => {
+                println!("{}", e);
+                break
+            }
             _ => break
         };
     }
@@ -27,15 +34,19 @@ pub fn interpret_iter<I: Iterator<Item=String>>(code_iter: I) {
     emu.dumpRegisters();
     emu.dumpLabels();
 
-    println!("\n   ::: x86 Emulator Instruction Dump :::");
-    println!("{:?}", code);
+    // println!("\n   ::: x86 Emulator Instruction Dump :::");
+    // println!("{:?}", code);
 }
 
 // Grab and decode the next instruction
-fn fetch<'a>(code: &'a mut Vec<Code>, pc: usize) -> Option<&'a Code> {
+fn fetch<'a>(code: &'a mut Vec<Code>, pc: usize) -> Result<Option<&'a Code>, String> {
     let res = match code.get(pc) {
         Some(&Code::Unread(ref line)) if line.trim() == "" => Code::Parsed(Command::NOP),
-        Some(&Code::Unread(ref line)) => Code::Parsed(second_parse(line)),
+        Some(&Code::Unread(ref line)) =>
+            match second_parse(line) {
+                Ok(line) => Code::Parsed(line),
+                Err(e) => return Err(e)
+            },
         _ => Code::EndProgram
     };
 
@@ -43,7 +54,7 @@ fn fetch<'a>(code: &'a mut Vec<Code>, pc: usize) -> Option<&'a Code> {
         code[pc] = Code::Parsed(line);
     }
 
-    code.get(pc)
+    Ok(code.get(pc))
 }
 
 // Perform initial organization of the input string
@@ -60,9 +71,9 @@ fn first_parse<I: Iterator<Item=String>>(code_iter: I) -> Vec<Code> {
 
 // TODO: Maybe look at abstracting this further (ie. break down the construction a bit more)
 // TODO: Figure out what I mean by ^
-fn second_parse(inst_str: &str) -> Command {
+fn second_parse(inst_str: &str) -> Result<Command, String> {
     match parse::x86_instruction(inst_str) {
-        IResult::Done(_, res) => res,
-        _ => panic!(format!("Invalid x86 instruction string: {}", inst_str))
+        IResult::Done(_, res) => Ok(res),
+        _ => Err(format!("Invalid x86 instruction string: {}", inst_str))
     }
 }
