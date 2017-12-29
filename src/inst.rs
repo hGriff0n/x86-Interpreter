@@ -1,7 +1,14 @@
 // instructions taken from: https://en.wikipedia.org/wiki/X86_instruction_listings
+// implementation reference: http://www.felixcloutier.com/x86/
+    // note this has more instructions
+    // that may just be a side effect of the instructions being "out of alphabetical order"
 
 use processor::FlagRegister;
 use std::io::*;
+
+// TODO: Implement all instructions
+// TODO: Come up with a better abstraction
+    // Needs to enforce sizing, etc. demands
 
 // integer
 pub fn aaa() {}
@@ -25,27 +32,60 @@ pub fn add(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.sign = (res & (1 << 31)) != 0;
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
-pub fn and() {}
+pub fn and(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    // Perform and operation
+    let res = *dst & *src;
+    *dst = res;
+
+    // Set appropriate flags
+    flags.overflow = false;
+    flags.carry = false;
+    flags.adjust = false;
+    flags.zero = (res == 0);
+    flags.sign = (res & (1 << 31)) != 0;
+    flags.parity = (res & 255u32).count_ones() % 2 != 0;
+}
 pub fn call() {}
 pub fn cbw() {}
-pub fn clc() {}
-pub fn cld() {}
-pub fn cli() {}
-pub fn cmc() {}
-pub fn cmp() {}
+pub fn clc(flags: &mut FlagRegister) {
+    flags.carry = false;
+}
+pub fn cld(flags: &mut FlagRegister) {
+    flags.direction = false;
+}
+pub fn cli(flags: &mut FlagRegister) {
+    flags.interrupt = false;
+}
+pub fn cmc(flags: &mut FlagRegister) {
+    flags.carry ^= true;
+}
+pub fn cmp(src: &u32, dst: &u32, flags: &mut FlagRegister) {
+    // TODO: Sign extensions ???
+    let mut tmp = *dst;
+    sub(src, &mut tmp, flags);
+}
+pub fn cmps() {}
 pub fn cmpsb() {}
 pub fn cmpsw() {}
 pub fn cwd() {}
 pub fn daa() {}
 pub fn das() {}
-pub fn dec() {}
+pub fn dec(dst: &mut u32, flags: &mut FlagRegister) {
+    let carry = flags.carry;
+    sub(&1, dst, flags);
+    flags.carry = carry;
+}
 pub fn div() {}
 pub fn esc() {}
 pub fn hlt() {}
 pub fn idiv() {}
 pub fn imul() {}
 pub fn _in_() {}
-pub fn inc() {}
+pub fn inc(dst: &mut u32, flags: &mut FlagRegister) {
+    let carry = flags.carry;
+    add(&1, dst, flags);
+    flags.carry = carry;
+}
 pub fn interrupt() {}
 pub fn into() {}
 pub fn iret() {}
@@ -97,10 +137,25 @@ pub fn mov() {}
 pub fn movsb() {}
 pub fn movsw() {}
 pub fn mul() {}
-pub fn neg() {}
+pub fn neg(dst: &mut u32, flags: &mut FlagRegister) {
+    sub(&0, dst, flags);
+}
 pub fn nop() {}
-pub fn not() {}
-pub fn or() {}
+pub fn not(dst: &mut u32, flags: &mut FlagRegister) {
+    *dst = dst.not();
+}
+pub fn or(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let res = dst.bitor(*src);
+    *dst = res;
+
+    // Set appropriate flags
+    flags.overflow = false;
+    flags.carry = false;
+    flags.adjust = false;
+    flags.zero = (res == 0);
+    flags.sign = (res & (1 << 31)) != 0;
+    flags.parity = (res & 255u32).count_ones() % 2 != 0;
+}
 pub fn out() {}
 pub fn pop() {}
 pub fn popf() {}
@@ -126,12 +181,33 @@ pub fn scasb() {}
 pub fn scasw() {}
 pub fn shl() {}
 pub fn shr() {}
-pub fn stc() {}
-pub fn std() {}
-pub fn sti() {}
+pub fn stc(flags: &mut FlagRegister) {
+    flags.carry = true;
+}
+pub fn std(flags: &mut FlagRegister) {
+    flags.direction = true;
+}
+pub fn sti(flags: &mut FlagRegister) {
+    flags.interrupt = true;
+}
 pub fn stosb() {}
 pub fn stosw() {}
-pub fn sub() {}
+pub fn sub(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    // Perform nibble addition for adjust flag setting
+    let (_, adjust) = (*dst & 15u32).overflowing_sub(*src & 15u32);
+
+    // Perform actual addition operation
+    let (res, over) = dst.overflowing_sub(*src);
+    *dst = res;
+
+    // Set the appropriate flags
+    flags.carry = over;
+    flags.adjust = adjust;
+    flags.overflow = over;
+    flags.zero = (res == 0);
+    flags.sign = (res & (1 << 31)) != 0;
+    flags.parity = (res & 255u32).count_ones() % 2 != 0;
+}
 pub fn test() {}
 pub fn wait() {}
 pub fn xchg() {}
