@@ -1,13 +1,29 @@
 // instructions taken from: https://en.wikipedia.org/wiki/X86_instruction_listings
 
+use processor::FlagRegister;
+use std::io::*;
+
 // integer
 pub fn aaa() {}
 pub fn aad() {}
 pub fn aam() {}
 pub fn aas() {}
 pub fn adc() {}
-pub fn add(src: &u32, dst: &mut u32) {
-    *dst += *src;
+pub fn add(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    // Perform nibble addition for adjust flag setting
+    let adjust = (*dst & 15u32) + (*src & 15u32) > 15;
+
+    // Perform actual addition operation
+    let (res, over) = dst.overflowing_add(*src);
+    *dst = res;
+
+    // Set the appropriate flags
+    flags.carry = over;
+    flags.adjust = adjust;
+    flags.overflow = over;
+    flags.zero = (res == 0);
+    flags.sign = (res & (1 << 31)) != 0;
+    flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
 pub fn and() {}
 pub fn call() {}
