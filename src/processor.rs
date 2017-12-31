@@ -1,4 +1,7 @@
 
+pub const EVEN: bool = false;
+pub const ODD: bool = true;
+
 #[derive(Debug)]
 pub struct FlagRegister {
     pub carry: bool,
@@ -23,7 +26,7 @@ impl FlagRegister {
     pub fn new() -> FlagRegister {
         Self {
             carry: false,
-            parity: false,
+            parity: EVEN,
             adjust: false,
             zero: false,
             sign: false,

@@ -3,7 +3,7 @@
     // note this has more instructions
     // that may just be a side effect of the instructions being "out of alphabetical order"
 
-use processor::FlagRegister;
+use processor::*;
 use std::io::*;
 
 // TODO: Implement all instructions
@@ -92,38 +92,142 @@ pub fn inc(dst: &mut u32, flags: &mut FlagRegister) {
 pub fn interrupt() {}
 pub fn into() {}
 pub fn iret() {}
-pub fn ja() {}
-pub fn jae() {}
-pub fn jb() {}
-pub fn jbe() {}
-pub fn jc() {}
-pub fn je() {}
-pub fn jg() {}
-pub fn jge() {}
-pub fn jl() {}
-pub fn jle() {}
-pub fn jna() {}
-pub fn jnae() {}
-pub fn jnb() {}
-pub fn jnbe() {}
-pub fn jnc() {}
-pub fn jne() {}
-pub fn jng() {}
-pub fn jnge() {}
-pub fn jnl() {}
-pub fn jnle() {}
-pub fn jno() {}
-pub fn jnp() {}
-pub fn jns() {}
-pub fn jnz() {}
-pub fn jo() {}
-pub fn jp() {}
-pub fn jpe() {}
-pub fn jpo() {}
-pub fn js() {}
-pub fn jz() {}
-pub fn jcxz() {}
-pub fn jmp() {}
+pub fn ja(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if !flags.carry && !flags.zero {
+        jmp(loc, rip);
+    }
+}
+pub fn jae(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jnc(loc, rip, flags);
+}
+pub fn jb(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jc(loc, rip, flags);
+}
+pub fn jbe(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jc(loc, rip, flags);
+    jz(loc, rip, flags);
+}
+pub fn jc(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if flags.carry {
+        jmp(loc, rip);
+    }
+}
+pub fn je(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jz(loc, rip, flags);
+}
+pub fn jg(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if !flags.zero && flags.sign == flags.overflow {
+        jmp(loc, rip);
+    }
+}
+pub fn jge(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if flags.sign == flags.overflow {
+        jmp(loc, rip);
+    }
+}
+pub fn jl(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if flags.sign != flags.overflow {
+        jmp(loc, rip);
+    }
+}
+pub fn jle(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jz(loc, rip, flags);
+    jl(loc, rip, flags);
+}
+pub fn jna(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jbe(loc, rip, flags);
+}
+pub fn jnae(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jc(loc, rip, flags);
+}
+pub fn jnb(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jnc(loc, rip, flags);
+}
+pub fn jnbe(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    ja(loc, rip, flags);
+}
+pub fn jnc(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if !flags.carry {
+        jmp(loc, rip);
+    }
+}
+pub fn jne(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if !flags.zero {
+        jmp(loc, rip);
+    }
+}
+pub fn jng(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jle(loc, rip, flags);
+}
+pub fn jnge(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jl(loc, rip, flags);
+}
+pub fn jnl(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jge(loc, rip, flags);
+}
+pub fn jnle(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    jg(loc, rip, flags);
+}
+pub fn jno(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if !flags.overflow {
+        jmp(loc, rip);
+    }
+}
+pub fn jnp(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    // NOTE: My parity bit is opposite of felixcloutier
+    if flags.parity {
+        jmp(loc, rip);
+    }
+}
+pub fn jns(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if !flags.sign {
+        jmp(loc, rip);
+    }
+}
+pub fn jnz(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if !flags.zero {
+        jmp(loc, rip);
+    }
+}
+pub fn jo(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if flags.overflow {
+        jmp(loc, rip);
+    }
+}
+pub fn jp(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    // NOTE: My parity bit is opposite of felixcloutier
+    if !flags.parity {
+        jmp(loc, rip);
+    }
+}
+pub fn jpe(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if flags.parity == EVEN {
+        jmp(loc, rip);
+    }
+}
+pub fn jpo(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if flags.parity == ODD {
+        jmp(loc, rip);
+    }
+}
+pub fn js(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if flags.sign {
+        jmp(loc, rip);
+    }
+}
+pub fn jz(loc: u32, rip: &mut u32, flags: &FlagRegister) {
+    if flags.zero {
+        jmp(loc, rip);
+    }
+}
+pub fn jcxz(loc: u32, ecx: &u32, rip: &mut u32, flags: &FlagRegister) {
+    if *ecx == 0 {
+        jmp(loc, rip);
+    }
+}
+pub fn jmp(loc: u32, rip: &mut u32) {
+    *rip = loc;
+}
 pub fn lahf() {}
 pub fn lds() {}
 pub fn lea() {}
@@ -131,11 +235,28 @@ pub fn les() {}
 pub fn lock() {}
 pub fn lodsb() {}
 pub fn lodsw() {}
-pub fn _loop_() {}
-pub fn loope() {}
-pub fn loopne() {}
-pub fn loopnz() {}
-pub fn loopz() {}
+pub fn _loop_(loc: u32, ecx: &mut u32, rip: &mut u32) {
+    *ecx -= 1;
+    if *ecx != 0 {
+        *rip = loc;
+    }
+}
+pub fn loope(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
+    loopz(loc, ecx, rip, flags);
+}
+pub fn loopne(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
+    loopnz(loc, ecx, rip, flags);
+}
+pub fn loopnz(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
+    if !flags.zero {
+        _loop_(loc, ecx, rip);
+    }
+}
+pub fn loopz(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
+    if flags.zero {
+        _loop_(loc, ecx, rip);
+    }
+}
 pub fn mov() {}
 pub fn movsb() {}
 pub fn movsw() {}
