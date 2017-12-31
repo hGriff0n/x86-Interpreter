@@ -15,7 +15,10 @@ pub fn aaa() {}
 pub fn aad() {}
 pub fn aam() {}
 pub fn aas() {}
-pub fn adc() {}
+pub fn adc(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let src = *src + (if flags.carry 1 else 0);
+    add(&src, dst, &flags);
+}
 pub fn add(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     // Perform nibble addition for adjust flag setting
     let adjust = (*dst & 15u32) + (*src & 15u32) > 15;
@@ -161,8 +164,14 @@ pub fn pop() {}
 pub fn popf() {}
 pub fn push() {}
 pub fn pushf() {}
-pub fn rcl() {}
-pub fn rcr() {}
+pub fn rcl(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    // TODO: Figure out what to do with the carry flag
+    rol(src, dst, flags);
+}
+pub fn rcr(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    // TODO: Figure out what to do with the carry flag
+    ror(src, dst, flags);
+}
 pub fn rep() {} // movs/stos/cmps/lods/scas
 pub fn repe() {}
 pub fn repne() {}
@@ -171,16 +180,40 @@ pub fn repz() {}
 pub fn ret() {}
 pub fn retn() {}
 pub fn retf() {}
-pub fn rol() {}
-pub fn ror() {}
+pub fn rol(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let res = dst.rotate_left(*src);
+    *dst= res;
+
+    // Set appropriate flags
+    if *src == 1 {
+        flags.overflow = flags.carry ^ ((res & (1 << 31)) != 0);
+    }
+}
+pub fn ror(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let res = dst.rotate_right(*src);
+    *dst = res;
+
+    // Set appropriate flags
+    if *src == 1 {
+        flags.overflow = ((res & (1 << 30)) != 0) ^ ((res & (1 << 31)) != 0);
+    }
+}
 pub fn sahf() {}
 pub fn sal() {}
 pub fn sar() {}
 pub fn sbb() {}
 pub fn scasb() {}
 pub fn scasw() {}
-pub fn shl() {}
-pub fn shr() {}
+pub fn shl(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let res = *dst << *src;
+
+    
+}
+pub fn shr(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let res = *dst >> *src;
+
+
+}
 pub fn stc(flags: &mut FlagRegister) {
     flags.carry = true;
 }
@@ -208,11 +241,28 @@ pub fn sub(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.sign = (res & (1 << 31)) != 0;
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
-pub fn test() {}
+pub fn test(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let mut tmp = *dst;
+    and(src, &mut tmp, flags);
+}
 pub fn wait() {}
-pub fn xchg() {}
+pub fn xchg(src: &mut u32, dst: &mut u32, flags: &FlagRegister) {
+    let tmp = *src;
+    *src = *dst;
+    *dst = tmp;
+}
 pub fn xlat() {}
-pub fn xor() {}
+pub fn xor(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let res = *dst ^ *src;
+    *dst = res;
+
+    // Set appropriate flags
+    flags.overflow = false;
+    flags.carry = false;
+    flags.zero = (res == 0);
+    flags.sign = (res & (1 << 31)) != 0;
+    flags.parity = (res & 255u32).count_ones() % 2 != 0;
+}
 
 // 80186/80188
 pub fn bound() {}
