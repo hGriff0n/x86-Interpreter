@@ -1,5 +1,6 @@
 // instructions taken from: https://en.wikipedia.org/wiki/X86_instruction_listings
 // implementation reference: http://www.felixcloutier.com/x86/
+    // This has highlighting: https://c9x.me/x86/ (but isn't as complete)
     // note this has more instructions
     // that may just be a side effect of the instructions being "out of alphabetical order"
 
@@ -10,11 +11,46 @@ use std::io::*;
 // TODO: Come up with a better abstraction
     // Needs to enforce sizing, etc. demands
 
-// integer
-pub fn aaa() {}
-pub fn aad() {}
-pub fn aam() {}
-pub fn aas() {}
+// integer instructions
+pub fn aaa(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
+    // Set appropriate flags
+    flags.adjust |= (*al & 0xf) > 9;
+    flags.carry = flags.adjust;
+
+    // Perform bcd adjustment
+    if flags.adjust {
+        *al += 6;
+        *ah += 1;
+    }
+
+    *al &= 0xf;
+}
+pub fn aad(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
+    // Perform bcd adjustment
+    let temp = *ah * 10;
+    *al = *al + temp & 0xff;
+    *ah = 0;
+    
+
+    // Set the appropriate flags
+    flags.zero = (*al == 0);
+    flags.sign = (*al & (1 << 7)) != 0;
+    flags.parity = al.count_ones() % 2 != 0;
+}
+pub fn aam(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {}
+pub fn aas(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
+    // Set appropriate flags
+    flags.adjust |= (*al & 0xf) > 9;
+    flags.carry = flags.adjust;
+
+    // Perform bcd adjustment
+    if flags.adjust {
+        *al -= 6;
+        *ah -= 1;
+    }
+
+    *al &= 0xf;
+}
 pub fn adc(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let src = *src + (if flags.carry 1 else 0);
     add(&src, dst, &flags);
@@ -49,7 +85,10 @@ pub fn and(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
 pub fn call() {}
-pub fn cbw() {}
+pub fn cbw(al: &u8, ax: &mut u16) {
+    let tmp: i8 = unsafe { std::mem::transmute(*al) };
+    *ax = unsafe { std::mem::transmute(tmp as i16) };
+}
 pub fn clc(flags: &mut FlagRegister) {
     flags.carry = false;
 }
@@ -70,16 +109,40 @@ pub fn cmp(src: &u32, dst: &u32, flags: &mut FlagRegister) {
 pub fn cmps() {}
 pub fn cmpsb() {}
 pub fn cmpsw() {}
-pub fn cwd() {}
-pub fn daa() {}
+// TODO: Test that this works
+pub fn cwd(ax: &mut u16, dx: &mut u16) {
+    let tmp: i16 = unsafe { std::mem::transmute(*ax) };
+    let value = tmp as i32;
+
+    *ax = unsafe { std::mem::transmute((value & 0xffff) as i16) };
+    *dx = unsafe { std::mem::transmute(((value >> 15) & 0xffff) as i16) };
+}
+pub fn daa(al: &mut u8, flags: &mut FlagRegister) {
+    // TODO: c9x implementation doesn't follow
+}
 pub fn das() {}
 pub fn dec(dst: &mut u32, flags: &mut FlagRegister) {
     let carry = flags.carry;
     sub(&1, dst, flags);
     flags.carry = carry;
 }
-pub fn div() {}
-pub fn esc() {}
+// NOTE: 'eax' and 'edx' are implicit operands
+// TODO: What does 'eax:edx' mean ???
+pub fn div(eax: &mut u32, edx: &mut u32, src: &u32, flags: &mut FlagRegister) {
+    let (res, over) = eax.overflowing_div(*src);
+    *edx = eax.wrapping_rem(*src);
+    *eax = res;
+
+    // Set appropriate flags
+    flags.overflow = over;
+    flags.carry = over;
+    flags.adjust = false;
+    flags.zero = (res == 0);
+    flags.sign = (res & (1 << 31)) != 0;
+    flags.parity = (res & 255u32).count_ones() % 2 != 0;
+}
+// Not found on felixcloutier
+// pub fn esc() {}
 pub fn hlt() {}
 pub fn idiv() {}
 pub fn imul() {}
@@ -220,7 +283,7 @@ pub fn jz(loc: u32, rip: &mut u32, flags: &FlagRegister) {
         jmp(loc, rip);
     }
 }
-pub fn jcxz(loc: u32, ecx: &u32, rip: &mut u32, flags: &FlagRegister) {
+pub fn jcxz(loc: u32, ecx: &u32, rip: &mut u32) {
     if *ecx == 0 {
         jmp(loc, rip);
     }
@@ -228,18 +291,33 @@ pub fn jcxz(loc: u32, ecx: &u32, rip: &mut u32, flags: &FlagRegister) {
 pub fn jmp(loc: u32, rip: &mut u32) {
     *rip = loc;
 }
-pub fn lahf() {}
+pub fn lahf(ah: &mut u8, flags: &FlagRegister) {
+    *ah = 2;
+    if flags.carry {
+        *ah |= 1;
+    }
+    if flags.parity {
+        *ah |= 4;
+    }
+    if flags.adjust {
+        *ah |= 16;
+    }
+    if flags.zero {
+        *ah |= 64;
+    }
+    if flags.sign {
+        *ah |= 128;
+    }
+}
 pub fn lds() {}
-pub fn lea() {}
+pub fn lea(src: &u32, dst: &mut u32) {}
 pub fn les() {}
 pub fn lock() {}
 pub fn lodsb() {}
 pub fn lodsw() {}
 pub fn _loop_(loc: u32, ecx: &mut u32, rip: &mut u32) {
     *ecx -= 1;
-    if *ecx != 0 {
-        *rip = loc;
-    }
+    jcxz(loc, ecx, rip);
 }
 pub fn loope(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
     loopz(loc, ecx, rip, flags);
@@ -257,10 +335,31 @@ pub fn loopz(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
         _loop_(loc, ecx, rip);
     }
 }
-pub fn mov() {}
-pub fn movsb() {}
+pub fn mov(src: &u32, dst: &mut u32) {
+    *dst = *src;
+}
+pub fn movsb(es: &u32, ds: &u32, flags: &FlagRegister) {}
 pub fn movsw() {}
-pub fn mul() {}
+// TODO: Ensure this operates correctly
+pub fn mul(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
+    let res = (*src as u64) * (*eax as u64);
+    
+    // Split into the two registers
+    let low: u32 = res & 0xffffffff;
+    let high: u32 = (res >> 32) & 0xffffffff;
+
+    // Assign to registers
+    *edx = high;
+    *eax = low;
+
+    // Set appropriate flags
+    flags.overflow = (high == 0);
+    flags.carry = (high == 0);
+    flags.adjust = false;
+    flags.zero = (res == 0);
+    flags.sign = (res & (1 << 31)) != 0;
+    flags.parity = (res & 255u32).count_ones() % 2 != 0;
+}
 pub fn neg(dst: &mut u32, flags: &mut FlagRegister) {
     sub(&0, dst, flags);
 }
@@ -420,9 +519,18 @@ pub fn bt() {}
 pub fn btc() {}
 pub fn btr() {}
 pub fn bts() {}
-pub fn cdq() {}
+pub fn cdq(eax: &mut u32, edx: &mut u32) {
+    let tmp: i32 = unsafe { std::mem::transmute(*eax) };
+    let value = tmp as i64;
+
+    *eax = unsafe { std::mem::transmute((value & 0xffffffff) as i32) };
+    *edx = unsafe { std::mem::transmute(((value >> 31) & 0xffffffff) as i16) };
+}
 pub fn cmpsd() {}
-pub fn cwde() {}
+pub fn cwde(ax: &u16: eax: &mut u32) {
+    let tmp: i16 = unsafe { std::mem::transmute(*ax) };
+    *eax = unsafe { std::mem::transmute(tmp as i32) };
+}
 pub fn insd() {}
 pub fn iretd() {}
 pub fn iretf() {}
@@ -632,7 +740,7 @@ pub fn blsic() {}
 pub fn t1mskc() {}
 pub fn tzmsk() {}
 
-// floating point
+// floating point instructions
 pub fn f2xm1() {}
 pub fn fabs() {}
 pub fn fadd() {}
