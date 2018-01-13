@@ -10,6 +10,24 @@ use std::io::*;
 // TODO: Implement all instructions
 // TODO: Come up with a better abstraction
     // Needs to enforce sizing, etc. demands
+// Considerations
+/*
+    How to perform sign extension of intermediate results?
+    How to handle the instructions where small registers are needed
+        and the ones where any registers are usable
+    related: How to enforce size matching restrictions / behavior
+        modification restrictions (ie. as with div)
+ */
+
+fn msb(num: u8) -> bool {
+    num & (1 << 7) != 0
+}
+fn msb(num: u16) -> bool {
+    num & (1 << 15) != 0
+}
+fn msb(num: u32) -> bool {
+    num & (1 << 32) != 0
+}
 
 // integer instructions
 // Correct
@@ -34,7 +52,7 @@ pub fn aad(al: &mut u8, ah: &mut u8, imm8: u8, flags: &mut FlagRegister) {
 
     // Set appropriate flags
     flags.zero = (*al == 0);
-    flags.sign = (*al & (1 << 7)) != 0;
+    flags.sign = msb(*al);
     flags.parity = al.count_ones() % 2 != 0;
 }
 pub fn aad(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
@@ -49,7 +67,7 @@ pub fn aam(al: &mut u8, ah: &mut u8, imm8: u8, flags: &mut FlagRegister) {
 
     // Set appropriate flags
     flags.zero = (*al == 0);
-    flags.sign = (*al & (1 << 7)) != 0;
+    flags.sign = msb(*al);
     flags.parity = al.count_ones() % 2 != 0;
 }
 pub fn aam(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
@@ -69,12 +87,13 @@ pub fn aas(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
 
     *al &= 0xf;
 }
-// TODO: Questions about signed/unsigned
+
+// Correct
 pub fn adc(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
-    let src = *src + (if flags.carry 1 else 0);
+    let src = *src + (flags.carry as u32);
     add(&src, dst, &flags);
 }
-// TODO: Question about signed/unsigned
+// Correct
 pub fn add(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     // Perform nibble addition for adjust flag setting
     let adjust = (*dst & 15u32) + (*src & 15u32) > 15;
@@ -88,7 +107,7 @@ pub fn add(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.adjust = adjust;
     flags.overflow = over;
     flags.zero = (res == 0);
-    flags.sign = (res & (1 << 31)) != 0;
+    flags.sign = msb(res);
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
 // Correct
@@ -102,76 +121,90 @@ pub fn and(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.carry = false;
     flags.adjust = false;
     flags.zero = (res == 0);
-    flags.sign = (res & (1 << 31)) != 0;
+    flags.sign = msb(res);
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
+// TODO: Implement
 pub fn call() {}
 // Correct
 pub fn cbw(al: &u8, ax: &mut u16) {
     *ax = 0xff & (*al as u16);
 
     // Sign extend the value of al to fill ax
-    if (*al & (1 << 7)) != 0 {
+    if msb(*al) {
         *ax |= 0xff00;
     }
 }
+// Correct
 pub fn clc(flags: &mut FlagRegister) {
     flags.carry = false;
 }
+// Correct
 pub fn cld(flags: &mut FlagRegister) {
     flags.direction = false;
 }
+// Correct
 pub fn cli(flags: &mut FlagRegister) {
     flags.interrupt = false;
 }
+// Correct
 pub fn cmc(flags: &mut FlagRegister) {
     flags.carry ^= true;
 }
-pub fn cmp(src: &u32, dst: &u32, flags: &mut FlagRegister) {
-    // TODO: Sign extensions ???
-    let mut tmp = *dst;
-    sub(src, &mut tmp, flags);
+// Correct
+pub fn cmp(fst: &u32, snd: &u32, flags: &mut FlagRegister) {
+    let mut tmp = *snd;
+    sub(fst, &mut tmp, flags);
 }
+// TODO: Implement
 pub fn cmps() {
     // These require loading from memory
 }
+// TODO: Implement
 pub fn cmpsb() {}
+// TODO: Implement
 pub fn cmpsw() {}
-// TODO: Test that this works
-pub fn cwd(ax: &mut u16, dx: &mut u16) {
-    let tmp: i16 = unsafe { std::mem::transmute(*ax) };
-    let value = tmp as i32;
+// Correct
+pub fn cwd(ax: &u16, dx: &mut u16) {
+    *dx = 0;
 
-    *ax = unsafe { std::mem::transmute((value & 0xffff) as i16) };
-    *dx = unsafe { std::mem::transmute(((value >> 15) & 0xffff) as i16) };
+    // Sign extend ax into the dx register
+    if msb(*ax) != 0 {
+        *dx = 0xffff;
+    }
 }
-pub fn daa(al: &mut u8, flags: &mut FlagRegister) {
-    // TODO: c9x implementation doesn't follow
-}
-pub fn das() {}
+// TODO: Implement
+pub fn daa(al: &mut u8, flags: &mut FlagRegister) {}
+// TODO: Implement
+pub fn das(al: &mut u8, flags: &mut FlagRegister) {}
+// Correct
 pub fn dec(dst: &mut u32, flags: &mut FlagRegister) {
     let carry = flags.carry;
     sub(&1, dst, flags);
     flags.carry = carry;
 }
-// NOTE: 'eax' and 'edx' are implicit operands
-// TODO: What does 'eax:edx' mean ???
-pub fn div(eax: &mut u32, edx: &mut u32, src: &u32, flags: &mut FlagRegister) {
-    let (res, over) = eax.overflowing_div(*src);
-    *edx = eax.wrapping_rem(*src);
+// Correct
+pub fn div(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
+    let num: u64 = *eax;
+    num |= (*edx as u64) << 32;
+
+    let res = num / *src;
+    *edx = num / *src;
     *eax = res;
 
     // Set appropriate flags
-    flags.overflow = over;
-    flags.carry = over;
+    flags.overflow = false;
+    flags.carry = false;
     flags.adjust = false;
     flags.zero = (res == 0);
-    flags.sign = (res & (1 << 31)) != 0;
+    flags.sign = msb(res);
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
 // Not found on felixcloutier
 // pub fn esc() {}
+// TODO: Implement
 pub fn hlt() {}
+// Correct
 pub fn idiv(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
     // Convert operands to the correct values
     let num: u64 = *eax;
@@ -180,11 +213,21 @@ pub fn idiv(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
     let div: i64 = unsafe{ std::mem::transmute(*src) };
 
     // Perform the operation
-    let rem: i32 = num % div;
-    let res: i32 = num / div;
-    *eax = res;
-    *edx = rem;
+    let (res, over) = num.overflowing_div(div);
+    *edx = unsafe { mem::transmute(num.wrapping_rem(div)) };
+    *eax = unsafe { mem::transmute(res) };
+
+    let res = *eax;
+
+    // Set appropriate flags
+    flags.carry = over;
+    flags.adjust = adjust;
+    flags.overflow = over;
+    flags.zero = (res == 0);
+    flags.sign = res > 0;
+    flags.parity = (*eax & 255u32).count_ones() % 2 != 0;
 }
+// TODO: This is supposed to be signed multiplication
 pub fn imul(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let res = (*dst as u64) * (*src as u64);
     *dst = res;
@@ -194,6 +237,7 @@ pub fn imul(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.overflow = flags.carry;
     flags.zero = (res == 0);
 }
+// TODO: This is supposed to be signed multiplication
 pub fn imul(src1: &u32, src2: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let res = (*src1 as u64) * (*src2 as u64);
     *dst = res;
@@ -205,6 +249,7 @@ pub fn imul(src1: &u32, src2: &u32, dst: &mut u32, flags: &mut FlagRegister) {
 }
 // TODO: Figure out i/o
 pub fn _in_() {}
+// Correct
 pub fn inc(dst: &mut u32, flags: &mut FlagRegister) {
     let carry = flags.carry;
     add(&1, dst, flags);
@@ -212,142 +257,175 @@ pub fn inc(dst: &mut u32, flags: &mut FlagRegister) {
 }
 // TODO: Figure out interrupt handling
 pub fn interrupt() {}
+// TODO: Figure out interrupt handling
 pub fn into() {}
 // TODO: Figure out call procedure
 pub fn iret() {}
+// Correct
 pub fn ja(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if !flags.carry && !flags.zero {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jae(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jnc(loc, rip, flags);
 }
+// Correct
 pub fn jb(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jc(loc, rip, flags);
 }
+// Correct
 pub fn jbe(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jc(loc, rip, flags);
     jz(loc, rip, flags);
 }
+// Correct
 pub fn jc(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if flags.carry {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn je(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jz(loc, rip, flags);
 }
+// Correct
 pub fn jg(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if !flags.zero && flags.sign == flags.overflow {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jge(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if flags.sign == flags.overflow {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jl(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if flags.sign != flags.overflow {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jle(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jz(loc, rip, flags);
     jl(loc, rip, flags);
 }
+// Correct
 pub fn jna(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jbe(loc, rip, flags);
 }
+// Correct
 pub fn jnae(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jc(loc, rip, flags);
 }
+// Correct
 pub fn jnb(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jnc(loc, rip, flags);
 }
+// Correct
 pub fn jnbe(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     ja(loc, rip, flags);
 }
+// Correct
 pub fn jnc(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if !flags.carry {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jne(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if !flags.zero {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jng(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jle(loc, rip, flags);
 }
+// Correct
 pub fn jnge(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jl(loc, rip, flags);
 }
+// Correct
 pub fn jnl(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jge(loc, rip, flags);
 }
+// Correct
 pub fn jnle(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     jg(loc, rip, flags);
 }
+// Correct
 pub fn jno(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if !flags.overflow {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jnp(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     // NOTE: My parity bit is opposite of felixcloutier
     if flags.parity {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jns(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if !flags.sign {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jnz(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if !flags.zero {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jo(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if flags.overflow {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jp(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     // NOTE: My parity bit is opposite of felixcloutier
     if !flags.parity {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jpe(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if flags.parity == EVEN {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jpo(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if flags.parity == ODD {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn js(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if flags.sign {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jz(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if flags.zero {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jcxz(loc: u32, ecx: &u32, rip: &mut u32) {
     if *ecx == 0 {
         jmp(loc, rip);
     }
 }
+// Correct
 pub fn jmp(loc: u32, rip: &mut u32) {
     *rip = loc;
 }
@@ -369,36 +447,50 @@ pub fn lahf(ah: &mut u8, flags: &FlagRegister) {
         *ah |= 128;
     }
 }
+// TODO: Figure out memory addressing
 pub fn lds() {}
+// TODO: Figure out memory stuff
 pub fn lea(src: &u32, dst: &mut u32) {}
+// TODO: Figure out memory addressing
 pub fn les() {}
+// TODO: Figure out multithreading
 pub fn lock() {}
+// TODO: Figure out memory addressing
 pub fn lodsb() {}
+// TODO: Figure out memory addressing
 pub fn lodsw() {}
+// Correct
 pub fn _loop_(loc: u32, ecx: &mut u32, rip: &mut u32) {
     *ecx -= 1;
     jcxz(loc, ecx, rip);
 }
+// Correct
 pub fn loope(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
     loopz(loc, ecx, rip, flags);
 }
+// Correct
 pub fn loopne(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
     loopnz(loc, ecx, rip, flags);
 }
+// Correct
 pub fn loopnz(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
     if !flags.zero {
         _loop_(loc, ecx, rip);
     }
 }
+// Correct
 pub fn loopz(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
     if flags.zero {
         _loop_(loc, ecx, rip);
     }
 }
+// Correct
 pub fn mov(src: &u32, dst: &mut u32) {
     *dst = *src;
 }
-pub fn movsb(es: &u32, ds: &u32, flags: &FlagRegister) {}
+// TODO: Figure out how memory works
+pub fn movsb() {}
+// TODO: Figure out how memory works
 pub fn movsw() {}
 // TODO: Ensure this operates correctly
 pub fn mul(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
@@ -417,16 +509,21 @@ pub fn mul(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
     flags.carry = (high == 0);
     flags.adjust = false;
     flags.zero = (res == 0);
-    flags.sign = (res & (1 << 31)) != 0;
+    flags.sign = msb(res);
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
+// Correct
 pub fn neg(dst: &mut u32, flags: &mut FlagRegister) {
     sub(&0, dst, flags);
+    flags.carry = (*dst == 0);
 }
+// TODO: Not sure if this is correct or not
 pub fn nop() {}
+// TODO: Not sure if `not` does what I expect
 pub fn not(dst: &mut u32, flags: &mut FlagRegister) {
     *dst = dst.not();
 }
+// Correct
 pub fn or(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let res = dst.bitor(*src);
     *dst = res;
@@ -436,93 +533,151 @@ pub fn or(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.carry = false;
     flags.adjust = false;
     flags.zero = (res == 0);
-    flags.sign = (res & (1 << 31)) != 0;
+    flags.sign = msb(res);
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
+// TODO: Figure out io
 pub fn out() {}
+// TODO: Figure out memory
 pub fn pop(dst: &mut u32, esp: &mut u32, mem: &[u8]) {
     let loc = *esp;
     *dst = unsafe{ std::mem::transmute(mem[loc..(loc + 4)]) };
     *esp += 4;
 }
+// TODO: Set flags, figure out memory
 pub fn popf(esp: &mut u32, mem: &[u8], flags: &mut FlagRegister) {
     let mut eflags = 0;
     pop(&mut eflags, esp, mem);
 
     // TODO: Set flags accordingly
 }
+// TODO: Figure out memory
 pub fn push(src: &u32, esp: &mut u32, mem: &mut [u8]) {
     let loc = *esp;
     *esp += 4;
     let mem: &mut u32 = unsafe{ std::mem::transmute(mem[loc..(loc + 4)]) };
     *mem = *src;
 }
+// TODO: Set flags, Figure out memory
 pub fn pushf(esp: &mut u32, mem: &mut [u8], flags: &mut FlagRegister) {
     let mut eflags = 0;
     // TODO: Set flags accordingly
     push(&eflags, esp, mem);
 }
-pub fn rcl(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
-    // TODO: Figure out what to do with the carry flag
-    rol(src, dst, flags);
+// Correct
+pub fn rcl(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let count = *cnt & 0x1f;
+    let dest = *dst;
+    
+    while count != 0 {
+        let carry = msb(*dst);
+        dest = (dest << 1) + (flags.carry as u32);
+        flags.carry = carry;
+        count -= 1;
+    }
+
+    if *cnt == 1 {
+        flags.overflow = msb(dest) ^ carry;
+    }
+    
+    *dst = dest;
 }
-pub fn rcr(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
-    // TODO: Figure out what to do with the carry flag
-    ror(src, dst, flags);
+// Correct
+pub fn rcr(count: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let count = *count & 0x1f;
+    let dest = *dst;
+
+    if count == 1 {
+        flags.overflow = msb(dest) ^ flags.carry;
+    }
+
+    while count != 0 {
+        let carry = (dest & 1) != 0;
+        dest = (dest >> 1) + ((flags.carry as u32) << 31);
+        flags.carry = carry;
+        count -= 1;
+    }
 }
+// TODO: Figure out how to repeat instructions
 pub fn rep() {} // movs/stos/cmps/lods/scas
 pub fn repe() {}
 pub fn repne() {}
 pub fn repnz() {}
 pub fn repz() {}
+// TODO: Figure out calling semantics
 pub fn ret() {}
 pub fn retn() {}
 pub fn retf() {}
+// TODO: Figure out if rust's semantics are correct
 pub fn rol(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
-    let res = dst.rotate_left(*src);
-    *dst= res;
+    let res = dst.rotate_left(*src % 32);
+    *dst = res;
 
     // Set appropriate flags
     if *src == 1 {
-        flags.overflow = flags.carry ^ ((res & (1 << 31)) != 0);
+        flags.overflow = flags.carry ^ msb(res);
     }
 }
+// TODO: Figure out if rust's semantics are correct
 pub fn ror(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let res = dst.rotate_right(*src);
     *dst = res;
 
     // Set appropriate flags
     if *src == 1 {
-        flags.overflow = ((res & (1 << 30)) != 0) ^ ((res & (1 << 31)) != 0);
+        flags.overflow = ((res & (1 << 30)) != 0) ^ msb(res);
     }
 }
-pub fn sahf() {}
+// Correct
+pub fn sahf(ah: &u8, flags: &mut FlagRegister) {
+    flags.carry = (*ah & 1) != 0;
+    flags.parity = (*ah & 4) != 0;
+    flags.adjust = (*ah & 16) != 0;
+    flags.zero = (*ah & 64) != 0;
+    flags.sign = (*ah & 128) != 0;
+}
+// TODO: Implement shift instructions
 pub fn sal() {}
+// TODO: Implement shift instructions
 pub fn sar() {}
-pub fn sbb() {}
+// Correct
+pub fn sbb(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let tmp = *src + (flags.carry as u32);
+    sub(&tmp, &dst, &flags);
+}
+// TODO: Figure out memory
 pub fn scasb() {}
+// TODO: Figure out memory
 pub fn scasw() {}
+// TODO: Find out what rust's semantics are
 pub fn shl(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let res = *dst << *src;
 
     
 }
+// TODO: Find out what rust's semantics are
 pub fn shr(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let res = *dst >> *src;
 
 
 }
+// Correct
 pub fn stc(flags: &mut FlagRegister) {
     flags.carry = true;
 }
+// Correct
 pub fn std(flags: &mut FlagRegister) {
     flags.direction = true;
 }
+// Correct
 pub fn sti(flags: &mut FlagRegister) {
     flags.interrupt = true;
 }
+// TODO: Figure out memory
 pub fn stosb() {}
+// TODO: Figure out memory
 pub fn stosw() {}
+// Correct
 pub fn sub(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     // Perform nibble addition for adjust flag setting
     let (_, adjust) = (*dst & 15u32).overflowing_sub(*src & 15u32);
@@ -539,17 +694,24 @@ pub fn sub(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.sign = (res & (1 << 31)) != 0;
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
+// Correct
 pub fn test(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let mut tmp = *dst;
     and(src, &mut tmp, flags);
 }
-pub fn wait() {}
+// TODO: Implement correct argument forwarding
+pub fn wait() {
+    fwait();
+}
+// Correct
 pub fn xchg(src: &mut u32, dst: &mut u32, flags: &FlagRegister) {
     let tmp = *src;
     *src = *dst;
     *dst = tmp;
 }
+// TODO: Figure out tables
 pub fn xlat() {}
+// Correct
 pub fn xor(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let res = *dst ^ *src;
     *dst = res;
@@ -597,12 +759,13 @@ pub fn bt() {}
 pub fn btc() {}
 pub fn btr() {}
 pub fn bts() {}
-pub fn cdq(eax: &mut u32, edx: &mut u32) {
-    let tmp: i32 = unsafe { std::mem::transmute(*eax) };
-    let value = tmp as i64;
+// Correct
+pub fn cdq(eax: &u32, edx: &mut u32) {
+    *edx = 0;
 
-    *eax = unsafe { std::mem::transmute((value & 0xffffffff) as i32) };
-    *edx = unsafe { std::mem::transmute(((value >> 31) & 0xffffffff) as i16) };
+    if (*eax & (1 << 31)) != 0 {
+        *edx = 0xffffffff;
+    }
 }
 pub fn cmpsd() {}
 // Correct
