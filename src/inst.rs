@@ -172,16 +172,48 @@ pub fn div(eax: &mut u32, edx: &mut u32, src: &u32, flags: &mut FlagRegister) {
 // Not found on felixcloutier
 // pub fn esc() {}
 pub fn hlt() {}
-pub fn idiv() {}
-pub fn imul() {}
+pub fn idiv(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
+    // Convert operands to the correct values
+    let num: u64 = *eax;
+    num |= (*edx as u64) << 32;
+    let num: i64 = unsafe{ std::mem::transmute(num) };
+    let div: i64 = unsafe{ std::mem::transmute(*src) };
+
+    // Perform the operation
+    let rem: i32 = num % div;
+    let res: i32 = num / div;
+    *eax = res;
+    *edx = rem;
+}
+pub fn imul(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let res = (*dst as u64) * (*src as u64);
+    *dst = res;
+
+    // Set appropriate flags
+    flags.carry = (res == *dst);
+    flags.overflow = flags.carry;
+    flags.zero = (res == 0);
+}
+pub fn imul(src1: &u32, src2: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    let res = (*src1 as u64) * (*src2 as u64);
+    *dst = res;
+
+    // Set appropriate flags
+    flags.carry = (res == *dst);
+    flags.overflow = flags.carry;
+    flags.zero = (res == 0);
+}
+// TODO: Figure out i/o
 pub fn _in_() {}
 pub fn inc(dst: &mut u32, flags: &mut FlagRegister) {
     let carry = flags.carry;
     add(&1, dst, flags);
     flags.carry = carry;
 }
+// TODO: Figure out interrupt handling
 pub fn interrupt() {}
 pub fn into() {}
+// TODO: Figure out call procedure
 pub fn iret() {}
 pub fn ja(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     if !flags.carry && !flags.zero {
@@ -408,10 +440,28 @@ pub fn or(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
 pub fn out() {}
-pub fn pop() {}
-pub fn popf() {}
-pub fn push() {}
-pub fn pushf() {}
+pub fn pop(dst: &mut u32, esp: &mut u32, mem: &[u8]) {
+    let loc = *esp;
+    *dst = unsafe{ std::mem::transmute(mem[loc..(loc + 4)]) };
+    *esp += 4;
+}
+pub fn popf(esp: &mut u32, mem: &[u8], flags: &mut FlagRegister) {
+    let mut eflags = 0;
+    pop(&mut eflags, esp, mem);
+
+    // TODO: Set flags accordingly
+}
+pub fn push(src: &u32, esp: &mut u32, mem: &mut [u8]) {
+    let loc = *esp;
+    *esp += 4;
+    let mem: &mut u32 = unsafe{ std::mem::transmute(mem[loc..(loc + 4)]) };
+    *mem = *src;
+}
+pub fn pushf(esp: &mut u32, mem: &mut [u8], flags: &mut FlagRegister) {
+    let mut eflags = 0;
+    // TODO: Set flags accordingly
+    push(&eflags, esp, mem);
+}
 pub fn rcl(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     // TODO: Figure out what to do with the carry flag
     rol(src, dst, flags);
