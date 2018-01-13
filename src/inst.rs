@@ -12,6 +12,7 @@ use std::io::*;
     // Needs to enforce sizing, etc. demands
 
 // integer instructions
+// Correct
 pub fn aaa(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
     // Set appropriate flags
     flags.adjust |= (*al & 0xf) > 9;
@@ -25,19 +26,36 @@ pub fn aaa(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
 
     *al &= 0xf;
 }
-pub fn aad(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
+// Correct
+pub fn aad(al: &mut u8, ah: &mut u8, imm8: u8, flags: &mut FlagRegister) {
     // Perform bcd adjustment
-    let temp = *ah * 10;
-    *al = *al + temp & 0xff;
+    *al = (*al + (*ah * imm8)) & 0xff
     *ah = 0;
-    
 
-    // Set the appropriate flags
+    // Set appropriate flags
     flags.zero = (*al == 0);
     flags.sign = (*al & (1 << 7)) != 0;
     flags.parity = al.count_ones() % 2 != 0;
 }
-pub fn aam(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {}
+pub fn aad(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
+    aad(al, ah, 10, flags);
+}
+// Correct
+pub fn aam(al: &mut u8, ah: &mut u8, imm8: u8, flags: &mut FlagRegister) {
+    // Perform bcd adjustment
+    let temp = *al;
+    *ah = temp / imm8;
+    *al = temp % imm8;
+
+    // Set appropriate flags
+    flags.zero = (*al == 0);
+    flags.sign = (*al & (1 << 7)) != 0;
+    flags.parity = al.count_ones() % 2 != 0;
+}
+pub fn aam(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
+    aam(al, ah, 10, flags);
+}
+// Correct
 pub fn aas(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
     // Set appropriate flags
     flags.adjust |= (*al & 0xf) > 9;
@@ -51,10 +69,12 @@ pub fn aas(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
 
     *al &= 0xf;
 }
+// TODO: Questions about signed/unsigned
 pub fn adc(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let src = *src + (if flags.carry 1 else 0);
     add(&src, dst, &flags);
 }
+// TODO: Question about signed/unsigned
 pub fn add(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     // Perform nibble addition for adjust flag setting
     let adjust = (*dst & 15u32) + (*src & 15u32) > 15;
@@ -71,6 +91,7 @@ pub fn add(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.sign = (res & (1 << 31)) != 0;
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
+// Correct
 pub fn and(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     // Perform and operation
     let res = *dst & *src;
@@ -85,9 +106,14 @@ pub fn and(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
 pub fn call() {}
+// Correct
 pub fn cbw(al: &u8, ax: &mut u16) {
-    let tmp: i8 = unsafe { std::mem::transmute(*al) };
-    *ax = unsafe { std::mem::transmute(tmp as i16) };
+    *ax = 0xff & (*al as u16);
+
+    // Sign extend the value of al to fill ax
+    if (*al & (1 << 7)) != 0 {
+        *ax |= 0xff00;
+    }
 }
 pub fn clc(flags: &mut FlagRegister) {
     flags.carry = false;
@@ -106,7 +132,9 @@ pub fn cmp(src: &u32, dst: &u32, flags: &mut FlagRegister) {
     let mut tmp = *dst;
     sub(src, &mut tmp, flags);
 }
-pub fn cmps() {}
+pub fn cmps() {
+    // These require loading from memory
+}
 pub fn cmpsb() {}
 pub fn cmpsw() {}
 // TODO: Test that this works
@@ -527,9 +555,14 @@ pub fn cdq(eax: &mut u32, edx: &mut u32) {
     *edx = unsafe { std::mem::transmute(((value >> 31) & 0xffffffff) as i16) };
 }
 pub fn cmpsd() {}
+// Correct
 pub fn cwde(ax: &u16: eax: &mut u32) {
-    let tmp: i16 = unsafe { std::mem::transmute(*ax) };
-    *eax = unsafe { std::mem::transmute(tmp as i32) };
+    *eax = 0xffff & (*ax as u32);
+
+    // Sign extend the value of ax to fill eax
+    if (*ax & (1 << 15)) != 0 {
+        *eax |= 0xffff0000;
+    }
 }
 pub fn insd() {}
 pub fn iretd() {}
@@ -668,7 +701,15 @@ pub fn mwait() {}
 pub fn crc32() {}
 
 // x86-64
-pub fn cdqe() {}
+// Correct
+pub fn cdqe(eax: &u32, rax: &mut u64) {
+    *rax = 0xffffffff & (*eax as u64);
+
+    // Sign extend the value of eax to fill rax
+    if (*eax & (1 << 31)) != 0 {
+        *rax |= 0xffffffff00000000;
+    }
+}
 pub fn cqo() {}
 pub fn cmpsq() {}
 pub fn cmpxchg16b() {}
