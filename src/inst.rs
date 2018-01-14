@@ -5,11 +5,16 @@
     // that may just be a side effect of the instructions being "out of alphabetical order"
 
 use processor::*;
-use std::io::*;
+use std; 
+use std::mem::transmute;
+use std::ops::{ BitOr, Not };
 
+// TODO: Implement call/ret instructions
 // TODO: Implement all instructions
 // TODO: Come up with a better abstraction
     // Needs to enforce sizing, etc. demands
+// TODO: Figure out whether I'm handling the memory buffer correctly
+    // I think I may be indexing it wrongly (depends on pop/push)
 // Considerations
 /*
     How to perform sign extension of intermediate results?
@@ -17,16 +22,20 @@ use std::io::*;
         and the ones where any registers are usable
     related: How to enforce size matching restrictions / behavior
         modification restrictions (ie. as with div)
+    How to handle segment selector and all the different addressing modes
  */
 
-fn msb(num: u8) -> bool {
+fn msb8(num: u8) -> bool {
     num & (1 << 7) != 0
 }
-fn msb(num: u16) -> bool {
+fn msb16(num: u16) -> bool {
     num & (1 << 15) != 0
 }
-fn msb(num: u32) -> bool {
-    num & (1 << 32) != 0
+fn msb32(num: u32) -> bool {
+    num & (1 << 31) != 0
+}
+fn msb64(num: u64) -> bool {
+    num & (1 << 63) != 0
 }
 
 // integer instructions
@@ -47,15 +56,15 @@ pub fn aaa(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
 // Correct
 pub fn aad(al: &mut u8, ah: &mut u8, imm8: u8, flags: &mut FlagRegister) {
     // Perform bcd adjustment
-    *al = (*al + (*ah * imm8)) & 0xff
+    *al = (*al + (*ah * imm8)) & 0xff;
     *ah = 0;
 
     // Set appropriate flags
-    flags.zero = (*al == 0);
-    flags.sign = msb(*al);
+    flags.zero = *al == 0;
+    flags.sign = msb8(*al);
     flags.parity = al.count_ones() % 2 != 0;
 }
-pub fn aad(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
+pub fn aad_10(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
     aad(al, ah, 10, flags);
 }
 // Correct
@@ -66,11 +75,11 @@ pub fn aam(al: &mut u8, ah: &mut u8, imm8: u8, flags: &mut FlagRegister) {
     *al = temp % imm8;
 
     // Set appropriate flags
-    flags.zero = (*al == 0);
-    flags.sign = msb(*al);
+    flags.zero = *al == 0;
+    flags.sign = msb8(*al);
     flags.parity = al.count_ones() % 2 != 0;
 }
-pub fn aam(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
+pub fn aam_10(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
     aam(al, ah, 10, flags);
 }
 // Correct
@@ -91,7 +100,7 @@ pub fn aas(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
 // Correct
 pub fn adc(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let src = *src + (flags.carry as u32);
-    add(&src, dst, &flags);
+    add(&src, dst, flags);
 }
 // Correct
 pub fn add(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
@@ -106,8 +115,8 @@ pub fn add(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.carry = over;
     flags.adjust = adjust;
     flags.overflow = over;
-    flags.zero = (res == 0);
-    flags.sign = msb(res);
+    flags.zero = res == 0;
+    flags.sign = msb32(res);
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
 // Correct
@@ -120,18 +129,20 @@ pub fn and(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.overflow = false;
     flags.carry = false;
     flags.adjust = false;
-    flags.zero = (res == 0);
-    flags.sign = msb(res);
+    flags.zero = res == 0;
+    flags.sign = msb32(res);
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
-// TODO: Implement
-pub fn call() {}
+// TODO: Figure out how to resolve the "near"/"far"/"protected"/etc.
+pub fn call() {
+
+}
 // Correct
 pub fn cbw(al: &u8, ax: &mut u16) {
     *ax = 0xff & (*al as u16);
 
     // Sign extend the value of al to fill ax
-    if msb(*al) {
+    if msb8(*al) {
         *ax |= 0xff00;
     }
 }
@@ -156,27 +167,67 @@ pub fn cmp(fst: &u32, snd: &u32, flags: &mut FlagRegister) {
     let mut tmp = *snd;
     sub(fst, &mut tmp, flags);
 }
-// TODO: Implement
-pub fn cmps() {
-    // These require loading from memory
+// Correct
+// TODO: Implement cmpsb, cmpsw, cmpsd in terms of cmps
+// pub fn cmps(ds: &u32, esi: &mut u32, es: &u32, edi: &mut u32, mem: &[u8], flags: &mut FlagRegister) {
+pub fn cmps(esi: &mut u32, edi: &mut u32, mem: &[u8], flags: &mut FlagRegister) {
+    // Calculate source addresses
+    let src1 = *esi as u64;
+    // src1 |= (*ds as u64) << 32;
+    let src2 = *edi as u64;
+    // src2 |= (*es as u64) << 32;
+
+    let src1 = src1 as usize;
+    let src2 = src2 as usize;
+
+    // Load the memory at the specified addresses
+    let src1: &u32 = unsafe{ transmute(mem[src1..(src1 + 4)].as_ptr()) };
+    let src2: &u32 = unsafe{ transmute(mem[src2..(src2 + 4)].as_ptr()) };
+    cmp(src1, src2, flags);
+
+    // Automatically increment the registers
+    let change = (flags.direction as u32) * 2 - 1;
+    *esi += change;
+    *edi += change;
+
+    // size 8: cmpsb
+    // size 16: cmpsw
+    // size 32: cmpsd
 }
-// TODO: Implement
-pub fn cmpsb() {}
-// TODO: Implement
-pub fn cmpsw() {}
 // Correct
 pub fn cwd(ax: &u16, dx: &mut u16) {
     *dx = 0;
 
     // Sign extend ax into the dx register
-    if msb(*ax) != 0 {
+    if msb16(*ax) {
         *dx = 0xffff;
     }
 }
-// TODO: Implement
-pub fn daa(al: &mut u8, flags: &mut FlagRegister) {}
-// TODO: Implement
-pub fn das(al: &mut u8, flags: &mut FlagRegister) {}
+// TODO: Figure out if the documentation is accurate
+pub fn daa(al: &mut u8, flags: &mut FlagRegister) {
+    flags.adjust |= (*al & 0xf) > 9;
+    flags.carry |= *al > 0x99;
+
+    if flags.adjust {
+        *al += 6;
+    }
+    if flags.carry {
+        *al += 0x60;
+    }
+}
+// TODO: Figure out if the documentation is accurate
+pub fn das(al: &mut u8, flags: &mut FlagRegister) {
+    flags.adjust |= (*al & 0xf) > 9;
+    flags.carry |= *al > 0x99;
+
+    if flags.adjust {
+        *al -= 6;
+    }
+
+    if flags.carry {
+        *al -= 0x60;
+    }
+}
 // Correct
 pub fn dec(dst: &mut u32, flags: &mut FlagRegister) {
     let carry = flags.carry;
@@ -185,67 +236,82 @@ pub fn dec(dst: &mut u32, flags: &mut FlagRegister) {
 }
 // Correct
 pub fn div(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
-    let num: u64 = *eax;
+    let mut num = *eax as u64;
     num |= (*edx as u64) << 32;
 
-    let res = num / *src;
-    *edx = num / *src;
-    *eax = res;
+    let res = num / (*src as u64);
+    *edx = (num % (*src as u64)) as u32;
+    *eax = res as u32;
 
     // Set appropriate flags
     flags.overflow = false;
     flags.carry = false;
     flags.adjust = false;
-    flags.zero = (res == 0);
-    flags.sign = msb(res);
-    flags.parity = (res & 255u32).count_ones() % 2 != 0;
+    flags.zero = res == 0;
+    flags.sign = msb64(res);
+    flags.parity = (res & 255u64).count_ones() % 2 != 0;
 }
 // Not found on felixcloutier
 // pub fn esc() {}
-// TODO: Implement
+// TODO: Need to figure out how execution engine would work
 pub fn hlt() {}
 // Correct
 pub fn idiv(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
     // Convert operands to the correct values
-    let num: u64 = *eax;
+    let mut num = *eax as u64;
     num |= (*edx as u64) << 32;
-    let num: i64 = unsafe{ std::mem::transmute(num) };
-    let div: i64 = unsafe{ std::mem::transmute(*src) };
+
+    let num: i64 = unsafe{ transmute(num) };
+    let div: i32 = unsafe{ transmute(*src) };
+    let div = div as i64;
 
     // Perform the operation
     let (res, over) = num.overflowing_div(div);
-    *edx = unsafe { mem::transmute(num.wrapping_rem(div)) };
-    *eax = unsafe { mem::transmute(res) };
+    *edx = unsafe{ transmute(num.wrapping_rem(div) as i32) };
+    *eax = unsafe{ transmute(res as i32) };
 
     let res = *eax;
 
     // Set appropriate flags
     flags.carry = over;
-    flags.adjust = adjust;
     flags.overflow = over;
-    flags.zero = (res == 0);
+    flags.zero = res == 0;
     flags.sign = res > 0;
     flags.parity = (*eax & 255u32).count_ones() % 2 != 0;
 }
-// TODO: This is supposed to be signed multiplication
+// Correct
 pub fn imul(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
-    let res = (*dst as u64) * (*src as u64);
-    *dst = res;
+    // Convert to signed integers
+    let isrc: i32 = unsafe{ transmute(*src) };
+    let isrc = isrc as i64;
+    let idst: i32 = unsafe{ transmute(*dst) };
+    let idst = idst as i64;
+    
+    // Perform multiplication
+    let res = isrc * idst;
+    *dst = unsafe{ transmute(res as i32) };
 
     // Set appropriate flags
-    flags.carry = (res == *dst);
+    flags.carry = res == ((res as i32) as i64);
     flags.overflow = flags.carry;
-    flags.zero = (res == 0);
+    flags.zero = res == 0;
 }
-// TODO: This is supposed to be signed multiplication
-pub fn imul(src1: &u32, src2: &u32, dst: &mut u32, flags: &mut FlagRegister) {
-    let res = (*src1 as u64) * (*src2 as u64);
-    *dst = res;
+// Correct
+pub fn imul_trip(src1: &u32, src2: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    // Convert to signed integers
+    let isrc1: i32 = unsafe{ transmute(*src1) };
+    let isrc1 = isrc1 as i64;
+    let isrc2: i32 = unsafe{ transmute(*src2) };
+    let isrc2 = isrc2 as i64;
+    
+    // Perform multiplication
+    let res = isrc1 * isrc2;
+    *dst = unsafe{ transmute(res as i32) };
 
     // Set appropriate flags
-    flags.carry = (res == *dst);
+    flags.carry = res == ((res as i32) as i64);
     flags.overflow = flags.carry;
-    flags.zero = (res == 0);
+    flags.zero = res == 0;
 }
 // TODO: Figure out i/o
 pub fn _in_() {}
@@ -429,23 +495,11 @@ pub fn jcxz(loc: u32, ecx: &u32, rip: &mut u32) {
 pub fn jmp(loc: u32, rip: &mut u32) {
     *rip = loc;
 }
+// Correct
 pub fn lahf(ah: &mut u8, flags: &FlagRegister) {
-    *ah = 2;
-    if flags.carry {
-        *ah |= 1;
-    }
-    if flags.parity {
-        *ah |= 4;
-    }
-    if flags.adjust {
-        *ah |= 16;
-    }
-    if flags.zero {
-        *ah |= 64;
-    }
-    if flags.sign {
-        *ah |= 128;
-    }
+    let eflags: u32 = std::convert::From::from(flags);
+    *ah = (eflags & 0xff) as u8;
+    *ah |= 0x2;
 }
 // TODO: Figure out memory addressing
 pub fn lds() {}
@@ -488,40 +542,59 @@ pub fn loopz(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
 pub fn mov(src: &u32, dst: &mut u32) {
     *dst = *src;
 }
-// TODO: Figure out how memory works
-pub fn movsb() {}
-// TODO: Figure out how memory works
-pub fn movsw() {}
-// TODO: Ensure this operates correctly
-pub fn mul(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
-    let res = (*src as u64) * (*eax as u64);
-    
-    // Split into the two registers
-    let low: u32 = res & 0xffffffff;
-    let high: u32 = (res >> 32) & 0xffffffff;
+// Correct
+// TODO: Implement movsb, movsw, movsd
+// pub fn movs(ds: &u32, esi: &mut u32, es: &u32, edi: &mut u32, mem: &mut [u8], flags: &mut FlagRegister) {
+pub fn movs(esi: &mut u32, edi: &mut u32, mem: &mut [u8], flags: &mut FlagRegister) {
+    // Calculate source addresses
+    let src = *esi as u64;
+    // src |= (*ds as u64) << 32;
+    let dst = *edi as u64;
+    // dst |= (*es as u64) << 32;
 
-    // Assign to registers
-    *edx = high;
-    *eax = low;
+    let src = src as usize;
+    let dst = dst as usize;
+
+    // Load the memory at the specified addresses
+    // TODO: Does this work properly?
+    let src: &u32 = unsafe{ transmute(mem[src..(src + 4)].as_ptr()) };
+    let dst: &u32 = unsafe{ transmute(mem[dst..(dst + 4)].as_mut_ptr()) };
+    cmp(src, dst, flags);
+
+    // Automatically increment the registers
+    let change = (flags.direction as u32) * 2 - 1;
+    *esi += change;
+    *edi += change;
+
+    // size 8: movsb
+    // size 16: movsw
+    // size 32: movsd
+}
+// Correct
+pub fn mul(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
+    // Perform multiplication
+    let res = (*src as u64) * (*eax as u64);
+    *edx = ((res >> 32) & 0xffffffff) as u32;
+    *eax = (res & 0xffffffff) as u32;
 
     // Set appropriate flags
-    flags.overflow = (high == 0);
-    flags.carry = (high == 0);
+    flags.overflow = *edx == 0;
+    flags.carry = *edx == 0;
     flags.adjust = false;
-    flags.zero = (res == 0);
-    flags.sign = msb(res);
-    flags.parity = (res & 255u32).count_ones() % 2 != 0;
+    flags.zero = res == 0;
+    flags.sign = msb32(*edx);
+    flags.parity = (res & 255u64).count_ones() % 2 != 0;
 }
 // Correct
 pub fn neg(dst: &mut u32, flags: &mut FlagRegister) {
     sub(&0, dst, flags);
-    flags.carry = (*dst == 0);
+    flags.carry = *dst == 0;
 }
-// TODO: Not sure if this is correct or not
+// todo: Not sure if this is correct or not
 pub fn nop() {}
-// TODO: Not sure if `not` does what I expect
+// Correct
 pub fn not(dst: &mut u32, flags: &mut FlagRegister) {
-    *dst = dst.not();
+    *dst = !*dst;
 }
 // Correct
 pub fn or(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
@@ -532,63 +605,63 @@ pub fn or(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.overflow = false;
     flags.carry = false;
     flags.adjust = false;
-    flags.zero = (res == 0);
-    flags.sign = msb(res);
+    flags.zero = res == 0;
+    flags.sign = msb32(res);
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
 // TODO: Figure out io
 pub fn out() {}
-// TODO: Figure out memory
+// Correct
 pub fn pop(dst: &mut u32, esp: &mut u32, mem: &[u8]) {
-    let loc = *esp;
-    *dst = unsafe{ std::mem::transmute(mem[loc..(loc + 4)]) };
+    let loc = *esp as usize;
     *esp += 4;
+    let tmp: &u32 = unsafe{ transmute(mem[loc..(loc + 4)].as_ptr()) };
+    *dst = *tmp;
 }
-// TODO: Set flags, figure out memory
+// Correct
 pub fn popf(esp: &mut u32, mem: &[u8], flags: &mut FlagRegister) {
     let mut eflags = 0;
     pop(&mut eflags, esp, mem);
-
-    // TODO: Set flags accordingly
+    *flags = eflags.into();
 }
-// TODO: Figure out memory
+// Correct
 pub fn push(src: &u32, esp: &mut u32, mem: &mut [u8]) {
-    let loc = *esp;
-    *esp += 4;
-    let mem: &mut u32 = unsafe{ std::mem::transmute(mem[loc..(loc + 4)]) };
+    *esp -= 4;
+    let loc = *esp as usize;
+
+    let mem: &mut u32 = unsafe{ transmute(mem[loc..(loc + 4)].as_mut_ptr()) };
     *mem = *src;
 }
-// TODO: Set flags, Figure out memory
+// Correct
 pub fn pushf(esp: &mut u32, mem: &mut [u8], flags: &mut FlagRegister) {
-    let mut eflags = 0;
-    // TODO: Set flags accordingly
+    let eflags = flags.into();
     push(&eflags, esp, mem);
 }
 // Correct
 pub fn rcl(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
-    let count = *cnt & 0x1f;
-    let dest = *dst;
+    let mut count = *cnt & 0x1f;
+    let mut dest = *dst;
     
     while count != 0 {
-        let carry = msb(*dst);
+        let carry = msb32(dest);
         dest = (dest << 1) + (flags.carry as u32);
         flags.carry = carry;
         count -= 1;
     }
 
     if *cnt == 1 {
-        flags.overflow = msb(dest) ^ carry;
+        flags.overflow = msb32(dest) ^ flags.carry;
     }
     
     *dst = dest;
 }
 // Correct
 pub fn rcr(count: &u32, dst: &mut u32, flags: &mut FlagRegister) {
-    let count = *count & 0x1f;
-    let dest = *dst;
+    let mut count = *count & 0x1f;
+    let mut dest = *dst;
 
     if count == 1 {
-        flags.overflow = msb(dest) ^ flags.carry;
+        flags.overflow = msb32(dest) ^ flags.carry;
     }
 
     while count != 0 {
@@ -597,8 +670,11 @@ pub fn rcr(count: &u32, dst: &mut u32, flags: &mut FlagRegister) {
         flags.carry = carry;
         count -= 1;
     }
+
+    *dst = dest;
 }
 // TODO: Figure out how to repeat instructions
+// TODO: This requires a consistent instruction interface
 pub fn rep() {} // movs/stos/cmps/lods/scas
 pub fn repe() {}
 pub fn repne() {}
@@ -608,24 +684,24 @@ pub fn repz() {}
 pub fn ret() {}
 pub fn retn() {}
 pub fn retf() {}
-// TODO: Figure out if rust's semantics are correct
+// Correct
 pub fn rol(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let res = dst.rotate_left(*src % 32);
     *dst = res;
 
     // Set appropriate flags
     if *src == 1 {
-        flags.overflow = flags.carry ^ msb(res);
+        flags.overflow = flags.carry ^ msb32(res);
     }
 }
-// TODO: Figure out if rust's semantics are correct
+// Correct
 pub fn ror(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let res = dst.rotate_right(*src);
     *dst = res;
 
     // Set appropriate flags
     if *src == 1 {
-        flags.overflow = ((res & (1 << 30)) != 0) ^ msb(res);
+        flags.overflow = ((res & (1 << 30)) != 0) ^ msb32(res);
     }
 }
 // Correct
@@ -636,30 +712,65 @@ pub fn sahf(ah: &u8, flags: &mut FlagRegister) {
     flags.zero = (*ah & 64) != 0;
     flags.sign = (*ah & 128) != 0;
 }
-// TODO: Implement shift instructions
-pub fn sal() {}
-// TODO: Implement shift instructions
-pub fn sar() {}
+// Correct
+pub fn sal(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    shl(cnt, dst, flags);
+}
+// Correct
+pub fn sar(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    flags.carry = (*dst & 1) != 0;
+    *dst >>= 1;
+    *dst &= !(1 << 31);         // ensure the msb is a 0
+
+    if *cnt > 1 {
+        let cnt = *cnt - 1;
+        sar(&cnt, dst, flags);
+    } else {
+        flags.overflow = msb32(*dst);
+    }
+}
 // Correct
 pub fn sbb(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let tmp = *src + (flags.carry as u32);
-    sub(&tmp, &dst, &flags);
+    sub(&tmp, dst, flags);
 }
-// TODO: Figure out memory
-pub fn scasb() {}
-// TODO: Figure out memory
-pub fn scasw() {}
-// TODO: Find out what rust's semantics are
-pub fn shl(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
-    let res = *dst << *src;
+// Correct
+// TODO: Implement scasb, scasw, scasd in terms of scas
+pub fn scas(edi: &mut u32, eax: &u32, mem: &[u8], flags: &mut FlagRegister) {
+    // Calculate source addresses
+    let src = *edi as u64;
+    // src1 |= (*es as u64) << 32;
 
-    
+    let src = src as usize;
+
+    // Load the memory at the specified addresses
+    let src: &u32 = unsafe{ transmute(mem[src..(src + 4)].as_ptr()) };
+    let mut eax = *eax;
+    cmp(src, &mut eax, flags);
+
+    // Automatically increment the registers
+    let change = (flags.direction as u32) * 2 - 1;
+    *edi += change;
+
+    // size 8: scasb
+    // size 16: scasw
+    // size 32: scasd
 }
-// TODO: Find out what rust's semantics are
-pub fn shr(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
-    let res = *dst >> *src;
+// Correct
+pub fn shl(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    *dst <<= *cnt - 1;
+    flags.carry = msb32(*dst);
+    *dst <<= 1;
 
+    flags.overflow = msb32(*dst) ^ flags.carry;
+}
+// Correct
+pub fn shr(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
+    *dst >>= *cnt - 1;
+    flags.carry = (*dst & 1) != 0;
+    *dst >>= 1;
 
+    flags.overflow = false;
 }
 // Correct
 pub fn stc(flags: &mut FlagRegister) {
@@ -673,10 +784,27 @@ pub fn std(flags: &mut FlagRegister) {
 pub fn sti(flags: &mut FlagRegister) {
     flags.interrupt = true;
 }
-// TODO: Figure out memory
-pub fn stosb() {}
-// TODO: Figure out memory
-pub fn stosw() {}
+// Correct
+// TODO: Implement stosb, stosw, stosd in terms of stos
+pub fn stos(edi: &mut u32, eax: &u32, mem: &mut [u8], flags: &FlagRegister) {
+    // Calculate source addresses
+    let src = *edi as u64;
+    // src1 |= (*es as u64) << 32;
+
+    let src = src as usize;
+
+    // Load the memory at the specified addresses
+    let src: &mut u32 = unsafe{ transmute(mem[src..(src + 4)].as_mut_ptr()) };
+    mov(eax, src);
+
+    // Automatically increment the registers
+    let change = (flags.direction as u32) * 2 - 1;
+    *edi += change;
+
+    // size 8: stosb
+    // size 16: stosw
+    // size 32: stosd
+}
 // Correct
 pub fn sub(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     // Perform nibble addition for adjust flag setting
@@ -690,7 +818,7 @@ pub fn sub(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.carry = over;
     flags.adjust = adjust;
     flags.overflow = over;
-    flags.zero = (res == 0);
+    flags.zero = res == 0;
     flags.sign = (res & (1 << 31)) != 0;
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
@@ -699,7 +827,7 @@ pub fn test(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let mut tmp = *dst;
     and(src, &mut tmp, flags);
 }
-// TODO: Implement correct argument forwarding
+// Correct
 pub fn wait() {
     fwait();
 }
@@ -719,7 +847,7 @@ pub fn xor(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     // Set appropriate flags
     flags.overflow = false;
     flags.carry = false;
-    flags.zero = (res == 0);
+    flags.zero = res == 0;
     flags.sign = (res & (1 << 31)) != 0;
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
@@ -767,9 +895,8 @@ pub fn cdq(eax: &u32, edx: &mut u32) {
         *edx = 0xffffffff;
     }
 }
-pub fn cmpsd() {}
 // Correct
-pub fn cwde(ax: &u16: eax: &mut u32) {
+pub fn cwde(ax: &u16, eax: &mut u32) {
     *eax = 0xffff & (*ax as u32);
 
     // Sign extend the value of ax to fill eax
@@ -798,7 +925,6 @@ pub fn popad() {}
 pub fn popfd() {}
 pub fn pushad() {}
 pub fn pushfd() {}
-pub fn scasd() {}
 pub fn seta() {}
 pub fn setae() {}
 pub fn setb() {}
@@ -1243,7 +1369,6 @@ andnp() {}
 orp() {}
 xorp() {}
 movup() {}
-movs() {}
 movlp() {}
 movhlp() {}
 unpcklp() {}
