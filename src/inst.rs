@@ -10,9 +10,9 @@ use std::mem::transmute;
 use std::ops::{ BitOr, Not };
 
 // TODO: Implement call/ret instructions
-// TODO: Implement movsx, movzx instructions
 // TODO: Go through testing to ensure all instructions are correct
     // NOTE: After this I can start working on the interpreter abstractions
+    // NOTE: Some instructions are better implemented at a higher-abstraction level
 
 // TODO: Add comments to documentation instructions indicating their assembly forms
 // TODO: Improve instructions to enforce sizing and other requirements
@@ -710,10 +710,15 @@ pub fn loopz(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
 pub fn mov(src: &u32, dst: &mut u32) {
     *dst = *src;
 }
-// TODO: Implement
-pub fn movsx() {}
-// TODO: Implement
-pub fn movzx() {}
+// Correct
+pub fn movsx(src: &u16, dst: &mut u32) {
+    let src: i16 = unsafe{ transmute(*src) };
+    *dst = unsafe{ transmute(src as i32) };
+}
+// Correct
+pub fn movzx(src: &u16, dst: &mut u32) {
+    *dst = *src as u32;
+}
 // Correct
 // TODO: Implement movsb, movsw, movsd
 // pub fn movs(ds: &u32, esi: &mut u32, es: &u32, edi: &mut u32, mem: &mut [u8], flags: &mut FlagRegister) {
