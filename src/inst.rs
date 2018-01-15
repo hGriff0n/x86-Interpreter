@@ -434,6 +434,24 @@ pub fn div(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
     flags.sign = msb64(res);
     flags.parity = (res & 255u64).count_ones() % 2 != 0;
 }
+// Correct
+pub fn enter(size: u32, nesting: u32, ebp: &mut u32, esp: &mut u32, mem: &mut [u8]) {
+    let nesting = nesting % 32;
+    push(ebp, esp, mem);
+    let mut temp = *esp;
+
+    if nesting > 0 {
+        for i in 1..nesting {
+            *ebp -= 4;
+            push(ebp, esp, mem);
+        }
+
+        push(&temp, esp, mem);
+    }
+
+    *ebp = temp;
+    *esp = temp - size;
+}
 // Not found on felixcloutier
 // pub fn esc() {}
 // TODO: Need to figure out how execution engine would work
@@ -650,6 +668,11 @@ pub fn lahf(ah: &mut u8, flags: &FlagRegister) {
 pub fn lds() {}
 // TODO: Figure out memory stuff
 pub fn lea(src: &u32, dst: &mut u32) {}
+// Correct
+pub fn leave(esp: &mut u32, ebp: &mut u32, mem: &[u8]) {
+    *esp = *ebp;
+    pop(ebp, esp, mem);
+}
 // TODO: Figure out memory addressing
 pub fn les() {}
 // TODO: Figure out multithreading
@@ -1278,9 +1301,7 @@ pub fn fisttp() {}
 // NOTE: These integer instructions, I probably don't need to implement (I won't be using them)
 // 80186/80188
 pub fn bound() {}
-pub fn enter() {}
 pub fn ins() {}
-pub fn leave() {}
 pub fn outs() {}
 pub fn popa() {}
 pub fn pusha() {}
