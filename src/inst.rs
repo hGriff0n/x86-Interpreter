@@ -137,9 +137,11 @@ pub fn and(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.sign = msb32(res);
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
-// TODO: Figure out how to resolve the "near"/"far"/"protected"/etc.
-pub fn call() {
-
+// Correct
+// TODO: Handle near/far/protected/etc. distinctions
+pub fn call(loc: &u32, rip: &mut u32, esp: &mut u32, mem: &mut [u32]) {
+    push(rip, esp, mem);
+    *rip = *loc;
 }
 // Correct
 pub fn cbw(al: &u8, ax: &mut u16) {
@@ -386,7 +388,7 @@ pub fn cwde(ax: &u16, eax: &mut u32) {
     if (*ax & (1 << 15)) != 0 {
         *eax |= 0xffff0000;
     }
-// TODO: Figure out if the documentation is accurate
+// Correct
 pub fn daa(al: &mut u8, flags: &mut FlagRegister) {
     flags.adjust |= (*al & 0xf) > 9;
     flags.carry |= *al > 0x99;
@@ -398,7 +400,7 @@ pub fn daa(al: &mut u8, flags: &mut FlagRegister) {
         *al += 0x60;
     }
 }
-// TODO: Figure out if the documentation is accurate
+// Correct
 pub fn das(al: &mut u8, flags: &mut FlagRegister) {
     flags.adjust |= (*al & 0xf) > 9;
     flags.carry |= *al > 0x99;
@@ -452,8 +454,6 @@ pub fn enter(size: u32, nesting: u32, ebp: &mut u32, esp: &mut u32, mem: &mut [u
     *ebp = temp;
     *esp = temp - size;
 }
-// Not found on felixcloutier
-// pub fn esc() {}
 // TODO: Need to figure out how execution engine would work
 pub fn hlt() {}
 // Correct
@@ -514,20 +514,12 @@ pub fn imul_trip(src1: &u32, src2: &u32, dst: &mut u32, flags: &mut FlagRegister
     flags.overflow = flags.carry;
     flags.zero = res == 0;
 }
-// TODO: Figure out i/o
-pub fn _in_() {}
 // Correct
 pub fn inc(dst: &mut u32, flags: &mut FlagRegister) {
     let carry = flags.carry;
     add(&1, dst, flags);
     flags.carry = carry;
 }
-// TODO: Figure out interrupt handling
-pub fn interrupt() {}
-// TODO: Figure out interrupt handling
-pub fn into() {}
-// TODO: Figure out call procedure
-pub fn iret() {}
 // Correct
 pub fn ja(loc: u32, rip: &mut u32, flags: &FlagRegister) {
     cmova(&loc, rip, flags);
@@ -786,8 +778,6 @@ pub fn or(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.sign = msb32(res);
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
-// TODO: Figure out io
-pub fn out() {}
 // Correct
 pub fn pop(dst: &mut u32, esp: &mut u32, mem: &[u8]) {
     let loc = *esp as usize;
@@ -850,17 +840,12 @@ pub fn rcr(count: &u32, dst: &mut u32, flags: &mut FlagRegister) {
 
     *dst = dest;
 }
-// TODO: Figure out how to repeat instructions
-// TODO: This requires a consistent instruction interface
-pub fn rep() {} // movs/stos/cmps/lods/scas
-pub fn repe() {}
-pub fn repne() {}
-pub fn repnz() {}
-pub fn repz() {}
-// TODO: Figure out calling semantics
-pub fn ret() {}
-pub fn retn() {}
-pub fn retf() {}
+// Correct
+pub fn ret(size: u32, rip: &mut u32, esp: &mut u32, mem: &[u8]) {
+    pop(rip, esp, mem);
+    *rip &= 0xffff;
+    *esp += size;
+}
 // Correct
 pub fn rol(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let res = dst.rotate_left(*src % 32);
@@ -1146,7 +1131,7 @@ pub fn sub(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.adjust = adjust;
     flags.overflow = over;
     flags.zero = res == 0;
-    flags.sign = (res & (1 << 31)) != 0;
+    flags.sign = msb32(res);
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
 // Correct
@@ -1164,8 +1149,6 @@ pub fn xchg(src: &mut u32, dst: &mut u32, flags: &FlagRegister) {
     *src = *dst;
     *dst = tmp;
 }
-// TODO: Figure out tables
-pub fn xlat() {}
 // Correct
 pub fn xor(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let res = *dst ^ *src;
@@ -1178,6 +1161,32 @@ pub fn xor(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.sign = (res & (1 << 31)) != 0;
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
+
+// TODO: Figure out memory stuff
+pub fn lea(src: &u32, dst: &mut u32) {}
+
+// TODO: Figure out how to repeat/multithread instructions
+// TODO: This requires a consistent instruction interface
+pub fn rep() {} // movs/stos/cmps/lods/scas
+pub fn repe() {}
+pub fn repne() {}
+pub fn repnz() {}
+pub fn repz() {}
+pub fn lock() {}
+
+// TODO: Figure out far/near distinction
+pub fn lds() {}
+pub fn les() {}
+
+// TODO: Figure out interrupt handling
+pub fn interrupt() {}
+pub fn into() {}
+pub fn iret() {}
+
+// TODO: Figure out io
+pub fn out() {}
+pub fn _in_() {}
+
 
 // floating point instructions
 pub fn f2xm1() {}
