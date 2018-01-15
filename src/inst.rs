@@ -7,7 +7,7 @@
 use processor::*;
 use std; 
 use std::mem::transmute;
-use std::ops::{ BitOr, Not };
+use std::ops::{ BitOr };
 
 // TODO: Go through testing to ensure all instructions are correct
     // NOTE: After this I can start working on the interpreter abstractions
@@ -15,9 +15,8 @@ use std::ops::{ BitOr, Not };
 
 // TODO: Add comments to documentation instructions indicating their assembly forms
 // TODO: Improve instructions to enforce sizing and other requirements
-
-
 // TODO: Implement all instructions
+
 // Considerations
 /*
     How to perform sign extension of intermediate results?
@@ -138,7 +137,7 @@ pub fn and(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
 }
 // Correct
 // TODO: Handle near/far/protected/etc. distinctions
-pub fn call(loc: &u32, rip: &mut u32, esp: &mut u32, mem: &mut [u32]) {
+pub fn call(loc: &u32, rip: &mut u32, esp: &mut u32, mem: &mut [u8]) {
     push(rip, esp, mem);
     *rip = *loc;
 }
@@ -280,20 +279,20 @@ pub fn cmovnle(src: &u32, dst: &mut u32, flags: &FlagRegister) {
 // Correct
 pub fn cmovno(src: &u32, dst: &mut u32, flags: &FlagRegister) {
     if !flags.overflow {
-        mov(src, dst, flags);
+        mov(src, dst);
     }
 }
 // Correct
 pub fn cmovnp(src: &u32, dst: &mut u32, flags: &FlagRegister) {
     // NOTE: My parity bit is opposite of felixcloutier
     if flags.parity {
-        mov(src, dst, flags);
+        mov(src, dst);
     }
 }
 // Correct
 pub fn cmovns(src: &u32, dst: &mut u32, flags: &FlagRegister) {
     if !flags.sign {
-        mov(src, dst, flags);
+        mov(src, dst);
     }
 }
 // Correct
@@ -351,7 +350,8 @@ pub fn cmpsb(esi: &mut u32, edi: &mut u32, mem: &[u8], flags: &mut FlagRegister)
     
     // Load the values
     let src1: &u8 = unsafe{ transmute(mem[src1..(src1 + 1)].as_ptr()) };
-    let mut src2: u8 = unsafe{ transmute(mem[src2..(src2 + 1)].as_ptr()) };
+    let src2: &u8 = unsafe{ transmute(mem[src2..(src2 + 1)].as_ptr()) };
+    let mut src2 = *src2;
     sub8(src1, &mut src2, flags);
 
     // Automatically increment the registers
@@ -367,7 +367,8 @@ pub fn cmpsw(esi: &mut u32, edi: &mut u32, mem: &[u8], flags: &mut FlagRegister)
     
     // Load the values
     let src1: &u16 = unsafe{ transmute(mem[src1..(src1 + 2)].as_ptr()) };
-    let mut src2: u16 = unsafe{ transmute(mem[src2..(src2 + 2)].as_ptr()) };
+    let src2: &u16 = unsafe{ transmute(mem[src2..(src2 + 2)].as_ptr()) };
+    let mut src2 = *src2;
     sub16(src1, &mut src2, flags);
 
     // Automatically increment the registers
@@ -383,7 +384,8 @@ pub fn cmpsd(esi: &mut u32, edi: &mut u32, mem: &[u8], flags: &mut FlagRegister)
     
     // Load the values
     let src1: &u32 = unsafe{ transmute(mem[src1..(src1 + 4)].as_ptr()) };
-    let mut src2: u32 = unsafe{ transmute(mem[src2..(src2 + 4)].as_ptr()) };
+    let src2: &u32 = unsafe{ transmute(mem[src2..(src2 + 4)].as_ptr()) };
+    let mut src2 = *src2;
     cmp(src1, &mut src2, flags);
 
     // Automatically increment the registers
@@ -408,6 +410,7 @@ pub fn cwde(ax: &u16, eax: &mut u32) {
     if (*ax & (1 << 15)) != 0 {
         *eax |= 0xffff0000;
     }
+}
 // Correct
 pub fn daa(al: &mut u8, flags: &mut FlagRegister) {
     flags.adjust |= (*al & 0xf) > 9;
@@ -682,43 +685,43 @@ pub fn leave(esp: &mut u32, ebp: &mut u32, mem: &[u8]) {
     pop(ebp, esp, mem);
 }
 // Correct
-pub fn lodsb(esi: &mut u32, al: &mut u8, mem: &[u8]) {
+pub fn lodsb(esi: &mut u32, al: &mut u8, mem: &[u8], flags: &FlagRegister) {
     // Calculate source addresses
-    let src = *edi as usize;
+    let src = *esi as usize;
 
     // Store the byte at the specified addresses
-    let src: &u8 = unsafe{ transmute(mem[src..(src + 1)].as_mut_ptr()) };
+    let src: &u8 = unsafe{ transmute(mem[src..(src + 1)].as_ptr()) };
     *al = *src;
 
     // Automatically increment the registers
     let change = (flags.direction as u32) * 2 - 1;
-    *edi += change;
+    *esi += change;
 }
 // Correct
-pub fn lodsw(esi: &mut u32, ax: &mut u16, mem: &[u8]) {
+pub fn lodsw(esi: &mut u32, ax: &mut u16, mem: &[u8], flags: &FlagRegister) {
     // Calculate source addresses
-    let src = *edi as usize;
+    let src = *esi as usize;
 
     // Store the byte at the specified addresses
-    let src: &u16 = unsafe{ transmute(mem[src..(src + 2)].as_mut_ptr()) };
+    let src: &u16 = unsafe{ transmute(mem[src..(src + 2)].as_ptr()) };
     *ax = *src;
 
     // Automatically increment the registers
     let change = (flags.direction as u32) * 2 - 1;
-    *edi += change;
+    *esi += change;
 }
 // Correct
-pub fn lodsd(esi: &mut u32, eax: &mut u32, mem: &[u8]) {
+pub fn lodsd(esi: &mut u32, eax: &mut u32, mem: &[u8], flags: &FlagRegister) {
     // Calculate source addresses
-    let src = *edi as usize;
+    let src = *esi as usize;
 
     // Store the byte at the specified addresses
-    let src: &u32 = unsafe{ transmute(mem[src..(src + 4)].as_mut_ptr()) };
+    let src: &u32 = unsafe{ transmute(mem[src..(src + 4)].as_ptr()) };
     *eax = *src;
 
     // Automatically increment the registers
     let change = (flags.direction as u32) * 2 - 1;
-    *edi += change;
+    *esi += change;
 }
 // Correct
 pub fn _loop_(loc: u32, ecx: &mut u32, rip: &mut u32) {
@@ -759,7 +762,7 @@ pub fn movzx(src: &u16, dst: &mut u32) {
     *dst = *src as u32;
 }
 // Correct
-pub fn movsb(esi: &u32, edi: &mut u32, mem: &mut [u8]) {
+pub fn movsb(esi: &mut u32, edi: &mut u32, mem: &mut [u8], flags: &FlagRegister) {
     // Calculate addresses
     let src = *esi as usize;
     let dst = *edi as usize;
@@ -775,7 +778,7 @@ pub fn movsb(esi: &u32, edi: &mut u32, mem: &mut [u8]) {
     *edi += change;
 }
 // Correct
-pub fn movsw(esi: &u32, edi: &mut u32, mem: &mut [u8]) {
+pub fn movsw(esi: &mut u32, edi: &mut u32, mem: &mut [u8], flags: &FlagRegister) {
     // Calculate addresses
     let src = *esi as usize;
     let dst = *edi as usize;
@@ -791,7 +794,7 @@ pub fn movsw(esi: &u32, edi: &mut u32, mem: &mut [u8]) {
     *edi += change;
 }
 // Correct
-pub fn movsd(esi: &u32, edi: &mut u32, mem: &mut [u8]) {
+pub fn movsd(esi: &mut u32, edi: &mut u32, mem: &mut [u8], flags: &FlagRegister) {
     // Calculate addresses
     let src = *esi as usize;
     let dst = *edi as usize;
@@ -968,9 +971,9 @@ pub fn scasb(edi: &mut u32, al: &u8, mem: &[u8], flags: &mut FlagRegister) {
     let src = *edi as usize;
     let src: &u8 = unsafe{ transmute(mem[src..(src + 1)].as_ptr()) };
 
-    let src = src as u32;
-    let mut eax = *eax;
-    cmp(src, &mut eax, flags);
+    let src = *src as u8;
+    let mut al = *al;
+    sub8(&src, &mut al, flags);
 
     let change = (flags.direction as u32) * 2 - 1;
     *edi += change;
@@ -978,11 +981,11 @@ pub fn scasb(edi: &mut u32, al: &u8, mem: &[u8], flags: &mut FlagRegister) {
 // Correct
 pub fn scasw(edi: &mut u32, ax: &u16, mem: &[u8], flags: &mut FlagRegister) {
     let src = *edi as usize;
-    let src: &u6 = unsafe{ transmute(mem[src..(src + 2)].as_ptr()) };
+    let src: &u16 = unsafe{ transmute(mem[src..(src + 2)].as_ptr()) };
 
-    let src = src as u32;
-    let mut eax = *eax;
-    cmp(src, &mut eax, flags);
+    let src = *src as u16;
+    let mut ax = *ax;
+    sub16(&src, &mut ax, flags);
 
     let change = (flags.direction as u32) * 2 - 1;
     *edi += change;
@@ -1203,7 +1206,7 @@ pub fn stosw(edi: &mut u32, eax: &u16, mem: &mut [u8], flags: &FlagRegister) {
     *edi += change;
 }
 // Correct
-pub fn stosd(edi: &mut u32, eax: &u16, mem: &mut [u8], flags: &FlagRegister) {
+pub fn stosd(edi: &mut u32, eax: &u32, mem: &mut [u8], flags: &FlagRegister) {
     // Calculate source addresses
     let dst = *edi as usize;
 
@@ -1484,7 +1487,6 @@ pub fn loopew() {}
 pub fn loopnew() {}
 pub fn loopnzw() {}
 pub fn loopzw() {}
-pub fn movsd() {}
 pub fn outsd() {}
 pub fn popad() {}
 pub fn popfd() {}
@@ -1492,7 +1494,6 @@ pub fn pushad() {}
 pub fn pushfd() {}
 pub fn shld() {}
 pub fn shrd() {}
-pub fn stosd() {}
 
 // 80486
 pub fn bswap() {}
