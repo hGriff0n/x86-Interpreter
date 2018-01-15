@@ -10,11 +10,15 @@ use std::mem::transmute;
 use std::ops::{ BitOr, Not };
 
 // TODO: Implement call/ret instructions
+// TODO: Implement movsx, movzx instructions
+// TODO: Go through testing to ensure all instructions are correct
+    // NOTE: After this I can start working on the interpreter abstractions
+
+// TODO: Add comments to documentation instructions indicating their assembly forms
+// TODO: Improve instructions to enforce sizing and other requirements
+
+
 // TODO: Implement all instructions
-// TODO: Come up with a better abstraction
-    // Needs to enforce sizing, etc. demands
-// TODO: Figure out whether I'm handling the memory buffer correctly
-    // I think I may be indexing it wrongly (depends on pop/push)
 // Considerations
 /*
     How to perform sign extension of intermediate results?
@@ -145,6 +149,22 @@ pub fn cbw(al: &u8, ax: &mut u16) {
     if msb8(*al) {
         *ax |= 0xff00;
     }
+}// Correct
+pub fn cdq(eax: &u32, edx: &mut u32) {
+    *edx = 0;
+
+    if (*eax & (1 << 31)) != 0 {
+        *edx = 0xffffffff;
+    }
+}
+// Correct
+pub fn cdqe(eax: &u32, rax: &mut u64) {
+    *rax = 0xffffffff & (*eax as u64);
+
+    // Sign extend the value of eax to fill rax
+    if (*eax & (1 << 31)) != 0 {
+        *rax |= 0xffffffff00000000;
+    }
 }
 // Correct
 pub fn clc(flags: &mut FlagRegister) {
@@ -161,6 +181,161 @@ pub fn cli(flags: &mut FlagRegister) {
 // Correct
 pub fn cmc(flags: &mut FlagRegister) {
     flags.carry ^= true;
+}
+// Correct
+pub fn cmova(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if !flags.carry && !flags.zero {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmovae(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovnc(src, dst, flags);
+}
+// Correct
+pub fn cmovb(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovc(src, dst, flags);
+}
+// Correct
+pub fn cmovbe(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovc(src, dst, flags);
+    cmovz(src, dst, flags);
+}
+// Correct
+pub fn cmovc(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if flags.carry {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmove(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovz(src, dst, flags);
+}
+// Correct
+pub fn cmovg(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if !flags.zero && flags.sign == flags.overflow {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmovge(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if flags.sign == flags.overflow {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmovl(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if flags.sign != flags.overflow {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmovle(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovz(src, dst, flags);
+    cmovl(src, dst, flags);
+}
+// Correct
+pub fn cmovna(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovbe(src, dst, flags);
+}
+// Correct
+pub fn cmovnae(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovc(src, dst, flags);
+}
+// Correct
+pub fn cmovnb(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovnc(src, dst, flags);
+}
+// Correct
+pub fn cmovnbe(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmova(src, dst, flags);
+}
+// Correct
+pub fn cmovnc(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if !flags.carry {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmovne(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovnz(src, dst, flags);
+}
+// Correct
+pub fn cmovng(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovle(src, dst, flags);
+}
+// Correct
+pub fn cmovnge(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovl(src, dst, flags);
+}
+// Correct
+pub fn cmovnl(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovge(src, dst, flags);
+}
+// Correct
+pub fn cmovnle(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    cmovg(src, dst, flags);
+}
+// Correct
+pub fn cmovno(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if !flags.overflow {
+        mov(src, dst, flags);
+    }
+}
+// Correct
+pub fn cmovnp(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    // NOTE: My parity bit is opposite of felixcloutier
+    if flags.parity {
+        mov(src, dst, flags);
+    }
+}
+// Correct
+pub fn cmovns(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if !flags.sign {
+        mov(src, dst, flags);
+    }
+}
+// Correct
+pub fn cmovnz(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if !flags.zero {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmovo(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if flags.overflow {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmovp(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if !flags.parity {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmovpe(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if flags.parity == EVEN {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmovpo(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if flags.parity == ODD {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmovs(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if flags.sign {
+        mov(src, dst);
+    }
+}
+// Correct
+pub fn cmovz(src: &u32, dst: &mut u32, flags: &FlagRegister) {
+    if flags.zero {
+        mov(src, dst);
+    }
 }
 // Correct
 pub fn cmp(fst: &u32, snd: &u32, flags: &mut FlagRegister) {
@@ -203,6 +378,14 @@ pub fn cwd(ax: &u16, dx: &mut u16) {
         *dx = 0xffff;
     }
 }
+// Correct
+pub fn cwde(ax: &u16, eax: &mut u32) {
+    *eax = 0xffff & (*ax as u32);
+
+    // Sign extend the value of ax to fill eax
+    if (*ax & (1 << 15)) != 0 {
+        *eax |= 0xffff0000;
+    }
 // TODO: Figure out if the documentation is accurate
 pub fn daa(al: &mut u8, flags: &mut FlagRegister) {
     flags.adjust |= (*al & 0xf) > 9;
@@ -329,161 +512,123 @@ pub fn into() {}
 pub fn iret() {}
 // Correct
 pub fn ja(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if !flags.carry && !flags.zero {
-        jmp(loc, rip);
-    }
+    cmova(&loc, rip, flags);
 }
 // Correct
 pub fn jae(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jnc(loc, rip, flags);
+    cmovnc(&loc, rip, flags);
 }
 // Correct
 pub fn jb(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jc(loc, rip, flags);
+    cmovb(&loc, rip, flags);
 }
 // Correct
 pub fn jbe(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jc(loc, rip, flags);
-    jz(loc, rip, flags);
+    cmovbe(&loc, rip, flags);
 }
 // Correct
 pub fn jc(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if flags.carry {
-        jmp(loc, rip);
-    }
+    cmovc(&loc, rip, flags);
 }
 // Correct
 pub fn je(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jz(loc, rip, flags);
+    cmove(&loc, rip, flags);
 }
 // Correct
 pub fn jg(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if !flags.zero && flags.sign == flags.overflow {
-        jmp(loc, rip);
-    }
+    cmovg(&loc, rip, flags);
 }
 // Correct
 pub fn jge(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if flags.sign == flags.overflow {
-        jmp(loc, rip);
-    }
+    cmovge(&loc, rip, flags);
 }
 // Correct
 pub fn jl(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if flags.sign != flags.overflow {
-        jmp(loc, rip);
-    }
+    cmovl(&loc, rip, flags);
 }
 // Correct
 pub fn jle(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jz(loc, rip, flags);
-    jl(loc, rip, flags);
+    cmovle(&loc, rip, flags);
 }
 // Correct
 pub fn jna(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jbe(loc, rip, flags);
+    cmovna(&loc, rip, flags);
 }
 // Correct
 pub fn jnae(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jc(loc, rip, flags);
+    cmovnae(&loc, rip, flags);
 }
 // Correct
 pub fn jnb(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jnc(loc, rip, flags);
+    cmovnb(&loc, rip, flags);
 }
 // Correct
 pub fn jnbe(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    ja(loc, rip, flags);
+    cmovnbe(&loc, rip, flags);
 }
 // Correct
 pub fn jnc(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if !flags.carry {
-        jmp(loc, rip);
-    }
+    cmovnc(&loc, rip, flags);
 }
 // Correct
 pub fn jne(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if !flags.zero {
-        jmp(loc, rip);
-    }
+    cmovne(&loc, rip, flags);
 }
 // Correct
 pub fn jng(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jle(loc, rip, flags);
+    cmovng(&loc, rip, flags);
 }
 // Correct
 pub fn jnge(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jl(loc, rip, flags);
+    cmovnge(&loc, rip, flags);
 }
 // Correct
 pub fn jnl(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jge(loc, rip, flags);
+    cmovnl(&loc, rip, flags);
 }
 // Correct
 pub fn jnle(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    jg(loc, rip, flags);
+    cmovnle(&loc, rip, flags);
 }
 // Correct
 pub fn jno(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if !flags.overflow {
-        jmp(loc, rip);
-    }
+    cmovno(&loc, rip, flags);
 }
 // Correct
 pub fn jnp(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    // NOTE: My parity bit is opposite of felixcloutier
-    if flags.parity {
-        jmp(loc, rip);
-    }
+    cmovnp(&loc, rip, flags);
 }
 // Correct
 pub fn jns(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if !flags.sign {
-        jmp(loc, rip);
-    }
+    cmovns(&loc, rip, flags);
 }
 // Correct
 pub fn jnz(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if !flags.zero {
-        jmp(loc, rip);
-    }
+    cmovnz(&loc, rip, flags);
 }
 // Correct
 pub fn jo(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if flags.overflow {
-        jmp(loc, rip);
-    }
+    cmovo(&loc, rip, flags);
 }
 // Correct
 pub fn jp(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    // NOTE: My parity bit is opposite of felixcloutier
-    if !flags.parity {
-        jmp(loc, rip);
-    }
+    cmovp(&loc, rip, flags);
 }
 // Correct
 pub fn jpe(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if flags.parity == EVEN {
-        jmp(loc, rip);
-    }
+    cmovpe(&loc, rip, flags);
 }
 // Correct
 pub fn jpo(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if flags.parity == ODD {
-        jmp(loc, rip);
-    }
+    cmovpo(&loc, rip, flags);
 }
 // Correct
 pub fn js(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if flags.sign {
-        jmp(loc, rip);
-    }
+    cmovs(&loc, rip, flags);
 }
 // Correct
 pub fn jz(loc: u32, rip: &mut u32, flags: &FlagRegister) {
-    if flags.zero {
-        jmp(loc, rip);
-    }
+    cmovz(&loc, rip, flags);
 }
 // Correct
 pub fn jcxz(loc: u32, ecx: &u32, rip: &mut u32) {
@@ -493,7 +638,7 @@ pub fn jcxz(loc: u32, ecx: &u32, rip: &mut u32) {
 }
 // Correct
 pub fn jmp(loc: u32, rip: &mut u32) {
-    *rip = loc;
+    mov(&loc, rip);
 }
 // Correct
 pub fn lahf(ah: &mut u8, flags: &FlagRegister) {
@@ -542,6 +687,10 @@ pub fn loopz(loc: u32, ecx: &mut u32, rip: &mut u32, flags: &FlagRegister) {
 pub fn mov(src: &u32, dst: &mut u32) {
     *dst = *src;
 }
+// TODO: Implement
+pub fn movsx() {}
+// TODO: Implement
+pub fn movzx() {}
 // Correct
 // TODO: Implement movsb, movsw, movsd
 // pub fn movs(ds: &u32, esi: &mut u32, es: &u32, edi: &mut u32, mem: &mut [u8], flags: &mut FlagRegister) {
@@ -757,6 +906,156 @@ pub fn scas(edi: &mut u32, eax: &u32, mem: &[u8], flags: &mut FlagRegister) {
     // size 32: scasd
 }
 // Correct
+pub fn seta(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmova(&1, dst, flags);
+}
+// Correct
+pub fn setae(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovae(&1, dst, flags);
+}
+// Correct
+pub fn setb(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovb(&1, dst, flags);
+}
+// Correct
+pub fn setbe(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovbe(&1, dst, flags);
+}
+// Correct
+pub fn setc(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovc(&1, dst, flags);
+}
+// Correct
+pub fn sete(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmove(&1, dst, flags);
+}
+// Correct
+pub fn setg(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovg(&1, dst, flags);
+}
+// Correct
+pub fn setge(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovge(&1, dst, flags);
+}
+// Correct
+pub fn setl(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovl(&1, dst, flags);
+}
+// Correct
+pub fn setle(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovle(&1, dst, flags);
+}
+// Correct
+pub fn setna(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovna(&1, dst, flags);
+}
+// Correct
+pub fn setnae(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovnae(&1, dst, flags);
+}
+// Correct
+pub fn setnb(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovnb(&1, dst, flags);
+}
+// Correct
+pub fn setnbe(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovnbe(&1, dst, flags);
+}
+// Correct
+pub fn setnc(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovnc(&1, dst, flags);
+}
+// Correct
+pub fn setne(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovne(&1, dst, flags);
+}
+// Correct
+pub fn setng(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovng(&1, dst, flags);
+}
+// Correct
+pub fn setnge(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovnge(&1, dst, flags);
+}
+// Correct
+pub fn setnl(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovnl(&1, dst, flags);
+}
+// Correct
+pub fn setnle(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovnle(&1, dst, flags);
+}
+// Correct
+pub fn setno(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovno(&1, dst, flags);
+}
+// Correct
+pub fn setnp(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovnp(&1, dst, flags);
+}
+// Correct
+pub fn setns(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovns(&1, dst, flags);
+}
+// Correct
+pub fn setnz(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovnz(&1, dst, flags);
+}
+// Correct
+pub fn seto(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovo(&1, dst, flags);
+}
+// Correct
+pub fn setp(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovp(&1, dst, flags);
+}
+// Correct
+pub fn setpe(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovpe(&1, dst, flags);
+}
+// Correct
+pub fn setpo(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovpo(&1, dst, flags);
+}
+// Correct
+pub fn sets(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovs(&1, dst, flags);
+}
+// Correct
+pub fn setz(dst: &mut u32, flags: &FlagRegister) {
+    *dst = 0;
+    cmovz(&1, dst, flags);
+}
+// Correct
 pub fn shl(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     *dst <<= *cnt - 1;
     flags.carry = msb32(*dst);
@@ -851,274 +1150,6 @@ pub fn xor(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     flags.sign = (res & (1 << 31)) != 0;
     flags.parity = (res & 255u32).count_ones() % 2 != 0;
 }
-
-// 80186/80188
-pub fn bound() {}
-pub fn enter() {}
-pub fn ins() {}
-pub fn leave() {}
-pub fn outs() {}
-pub fn popa() {}
-pub fn pusha() {}
-
-// 8028
-pub fn arpl() {}
-pub fn clts() {}
-pub fn lar() {}
-pub fn lgdt() {}
-pub fn lidt() {}
-pub fn lldt() {}
-pub fn lmsw() {}
-pub fn loadall() {}
-pub fn lsl() {}
-pub fn ltr() {}
-pub fn sgdt() {}
-pub fn sidt() {}
-pub fn sldt() {}
-pub fn smsw() {}
-pub fn str() {}
-pub fn verr() {}
-pub fn verw() {}
-
-// 80386
-pub fn bsf() {}
-pub fn bsr() {}
-pub fn bt() {}
-pub fn btc() {}
-pub fn btr() {}
-pub fn bts() {}
-// Correct
-pub fn cdq(eax: &u32, edx: &mut u32) {
-    *edx = 0;
-
-    if (*eax & (1 << 31)) != 0 {
-        *edx = 0xffffffff;
-    }
-}
-// Correct
-pub fn cwde(ax: &u16, eax: &mut u32) {
-    *eax = 0xffff & (*ax as u32);
-
-    // Sign extend the value of ax to fill eax
-    if (*ax & (1 << 15)) != 0 {
-        *eax |= 0xffff0000;
-    }
-}
-pub fn insd() {}
-pub fn iretd() {}
-pub fn iretf() {}
-pub fn jecxz() {}
-pub fn lfs() {}
-pub fn lgs() {}
-pub fn lss() {}
-pub fn lodsd() {}
-pub fn loopw() {}
-pub fn loopew() {}
-pub fn loopnew() {}
-pub fn loopnzw() {}
-pub fn loopzw() {}
-pub fn movsd() {}
-pub fn movsx() {}
-pub fn movzx() {}
-pub fn outsd() {}
-pub fn popad() {}
-pub fn popfd() {}
-pub fn pushad() {}
-pub fn pushfd() {}
-pub fn seta() {}
-pub fn setae() {}
-pub fn setb() {}
-pub fn setbe() {}
-pub fn setc() {}
-pub fn sete() {}
-pub fn setg() {}
-pub fn setge() {}
-pub fn setl() {}
-pub fn setle() {}
-pub fn setna() {}
-pub fn setnae() {}
-pub fn setnb() {}
-pub fn setnbe() {}
-pub fn setnc() {}
-pub fn setne() {}
-pub fn setng() {}
-pub fn setnge() {}
-pub fn setnl() {}
-pub fn setnle() {}
-pub fn setno() {}
-pub fn setnp() {}
-pub fn setns() {}
-pub fn setnz() {}
-pub fn seto() {}
-pub fn setp() {}
-pub fn setpe() {}
-pub fn setpo() {}
-pub fn sets() {}
-pub fn setz() {}
-pub fn shld() {}
-pub fn shrd() {}
-pub fn stosd() {}
-
-// 80486
-pub fn bswap() {}
-pub fn cmpxchg() {}
-pub fn invd() {}
-pub fn invlpg() {}
-pub fn wbinvd() {}
-pub fn xadd() {}
-
-// pentium
-pub fn cpuid() {}
-pub fn cmpxchg8b() {}
-pub fn rdmsr() {}
-pub fn rdtsc() {}
-pub fn wrmsr() {}
-pub fn rsm() {}
-
-// pentium mmx
-pub fn rdpmc() {}
-
-// amd k6 / pentium ii
-pub fn syscall() {}
-pub fn sysret() {}
-
-// pentium pro
-pub fn cmova() {}
-pub fn cmovae() {}
-pub fn cmovb() {}
-pub fn cmovbe() {}
-pub fn cmovc() {}
-pub fn cmove() {}
-pub fn cmovg() {}
-pub fn cmovge() {}
-pub fn cmovl() {}
-pub fn cmovle() {}
-pub fn cmovna() {}
-pub fn cmovnae() {}
-pub fn cmovnb() {}
-pub fn cmovnbe() {}
-pub fn cmovnc() {}
-pub fn cmovne() {}
-pub fn cmovng() {}
-pub fn cmovnge() {}
-pub fn cmovnl() {}
-pub fn cmovnle() {}
-pub fn cmovno() {}
-pub fn cmovnp() {}
-pub fn cmovns() {}
-pub fn cmovnz() {}
-pub fn cmovo() {}
-pub fn cmovp() {}
-pub fn cmovpe() {}
-pub fn cmovpo() {}
-pub fn cmovs() {}
-pub fn cmovz() {}
-pub fn ud2() {}
-
-// sse
-pub fn maskmovq() {}
-pub fn movntps() {}
-pub fn movntq() {}
-pub fn prefetcht0() {}
-pub fn prefetcht1() {}
-pub fn prefetcht2() {}
-pub fn prefetchnta() {}
-pub fn sfence() {}
-
-// sse2
-pub fn clflush() {}
-pub fn lfence() {}
-pub fn mfence() {}
-pub fn movnti() {}
-pub fn pause() {}
-
-// sse3
-pub fn monitor() {}
-pub fn mwait() {}
-
-// sse4.2
-pub fn crc32() {}
-
-// x86-64
-// Correct
-pub fn cdqe(eax: &u32, rax: &mut u64) {
-    *rax = 0xffffffff & (*eax as u64);
-
-    // Sign extend the value of eax to fill rax
-    if (*eax & (1 << 31)) != 0 {
-        *rax |= 0xffffffff00000000;
-    }
-}
-pub fn cqo() {}
-pub fn cmpsq() {}
-pub fn cmpxchg16b() {}
-pub fn iretq() {}
-pub fn jrcxz() {}
-pub fn lodsq() {}
-pub fn movsxd() {}
-pub fn popfq() {}
-pub fn pushfq() {}
-pub fn rdtscp() {}
-pub fn scasq() {}
-pub fn stosq() {}
-pub fn swapgs() {}
-
-// amd-c
-pub fn clgi() {}
-pub fn invlpga() {}
-// mov(CRn)
-// mov(DRn)
-pub fn skinit() {}
-pub fn stgi() {}
-pub fn vmload() {}
-pub fn vmmcall() {}
-pub fn vmrun() {}
-pub fn vmsave() {}
-
-// VT-x
-pub fn vmptrld() {}
-pub fn vmptrst() {}
-pub fn vmclear() {}
-pub fn vmread() {}
-pub fn vmwrite() {}
-pub fn vmcall() {}
-pub fn vmlaunch() {}
-pub fn vmresume() {}
-pub fn vmxoff() {}
-pub fn vmxon() {}
-
-// abm
-pub fn lzcnt() {}
-pub fn popcnt() {}
-
-// bmi1
-pub fn andn() {}
-pub fn bextr() {}
-pub fn blsi() {}
-pub fn blsmsk() {}
-pub fn blsr() {}
-pub fn tzcnt() {}
-
-// bmi2
-pub fn bzhi() {}
-pub fn mulx() {}
-pub fn pdep() {}
-pub fn pext() {}
-pub fn rorx() {}
-pub fn sarx() {}
-pub fn shrx() {}
-pub fn shlx() {}
-
-// tbm
-pub fn blcfill() {}
-pub fn blci() {}
-pub fn blcic() {}
-pub fn blcmask() {}
-pub fn blcs() {}
-pub fn blsfill() {}
-pub fn blsic() {}
-pub fn t1mskc() {}
-pub fn tzmsk() {}
 
 // floating point instructions
 pub fn f2xm1() {}
@@ -1242,6 +1273,188 @@ pub fn fxsave() {}
 
 // sse3
 pub fn fisttp() {}
+
+
+// NOTE: These integer instructions, I probably don't need to implement (I won't be using them)
+// 80186/80188
+pub fn bound() {}
+pub fn enter() {}
+pub fn ins() {}
+pub fn leave() {}
+pub fn outs() {}
+pub fn popa() {}
+pub fn pusha() {}
+
+// 8028
+pub fn arpl() {}
+pub fn clts() {}
+pub fn lar() {}
+pub fn lgdt() {}
+pub fn lidt() {}
+pub fn lldt() {}
+pub fn lmsw() {}
+pub fn loadall() {}
+pub fn lsl() {}
+pub fn ltr() {}
+pub fn sgdt() {}
+pub fn sidt() {}
+pub fn sldt() {}
+pub fn smsw() {}
+pub fn str() {}
+pub fn verr() {}
+pub fn verw() {}
+
+// 80386
+pub fn bsf() {}
+pub fn bsr() {}
+pub fn bt() {}
+pub fn btc() {}
+pub fn btr() {}
+pub fn bts() {}
+pub fn insd() {}
+pub fn iretd() {}
+pub fn iretf() {}
+pub fn jecxz() {}
+pub fn lfs() {}
+pub fn lgs() {}
+pub fn lss() {}
+pub fn lodsd() {}
+pub fn loopw() {}
+pub fn loopew() {}
+pub fn loopnew() {}
+pub fn loopnzw() {}
+pub fn loopzw() {}
+pub fn movsd() {}
+pub fn outsd() {}
+pub fn popad() {}
+pub fn popfd() {}
+pub fn pushad() {}
+pub fn pushfd() {}
+pub fn shld() {}
+pub fn shrd() {}
+pub fn stosd() {}
+
+// 80486
+pub fn bswap() {}
+pub fn cmpxchg() {}
+pub fn invd() {}
+pub fn invlpg() {}
+pub fn wbinvd() {}
+pub fn xadd() {}
+
+// pentium
+pub fn cpuid() {}
+pub fn cmpxchg8b() {}
+pub fn rdmsr() {}
+pub fn rdtsc() {}
+pub fn wrmsr() {}
+pub fn rsm() {}
+
+// pentium mmx
+pub fn rdpmc() {}
+
+// amd k6 / pentium ii
+pub fn syscall() {}
+pub fn sysret() {}
+
+// pentium pro
+pub fn ud2() {}
+
+// sse
+pub fn maskmovq() {}
+pub fn movntps() {}
+pub fn movntq() {}
+pub fn prefetcht0() {}
+pub fn prefetcht1() {}
+pub fn prefetcht2() {}
+pub fn prefetchnta() {}
+pub fn sfence() {}
+
+// sse2
+pub fn clflush() {}
+pub fn lfence() {}
+pub fn mfence() {}
+pub fn movnti() {}
+pub fn pause() {}
+
+// sse3
+pub fn monitor() {}
+pub fn mwait() {}
+
+// sse4.2
+pub fn crc32() {}
+
+// x86-64
+pub fn cqo() {}
+pub fn cmpsq() {}
+pub fn cmpxchg16b() {}
+pub fn iretq() {}
+pub fn jrcxz() {}
+pub fn lodsq() {}
+pub fn movsxd() {}
+pub fn popfq() {}
+pub fn pushfq() {}
+pub fn rdtscp() {}
+pub fn scasq() {}
+pub fn stosq() {}
+pub fn swapgs() {}
+
+// amd-c
+pub fn clgi() {}
+pub fn invlpga() {}
+// mov(CRn)
+// mov(DRn)
+pub fn skinit() {}
+pub fn stgi() {}
+pub fn vmload() {}
+pub fn vmmcall() {}
+pub fn vmrun() {}
+pub fn vmsave() {}
+
+// VT-x
+pub fn vmptrld() {}
+pub fn vmptrst() {}
+pub fn vmclear() {}
+pub fn vmread() {}
+pub fn vmwrite() {}
+pub fn vmcall() {}
+pub fn vmlaunch() {}
+pub fn vmresume() {}
+pub fn vmxoff() {}
+pub fn vmxon() {}
+
+// abm
+pub fn lzcnt() {}
+pub fn popcnt() {}
+
+// bmi1
+pub fn andn() {}
+pub fn bextr() {}
+pub fn blsi() {}
+pub fn blsmsk() {}
+pub fn blsr() {}
+pub fn tzcnt() {}
+
+// bmi2
+pub fn bzhi() {}
+pub fn mulx() {}
+pub fn pdep() {}
+pub fn pext() {}
+pub fn rorx() {}
+pub fn sarx() {}
+pub fn shrx() {}
+pub fn shlx() {}
+
+// tbm
+pub fn blcfill() {}
+pub fn blci() {}
+pub fn blcic() {}
+pub fn blcmask() {}
+pub fn blcs() {}
+pub fn blsfill() {}
+pub fn blsic() {}
+pub fn t1mskc() {}
+pub fn tzmsk() {}
 
 /*
 // simd (note: some of these are duplicates for different sizes)
