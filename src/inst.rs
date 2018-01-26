@@ -5,7 +5,7 @@
     // that may just be a side effect of the instructions being "out of alphabetical order"
 
 use processor::*;
-use std; 
+use std;
 use std::mem::transmute;
 use std::ops::{ BitOr };
 
@@ -62,6 +62,7 @@ pub fn aad(al: &mut u8, ah: &mut u8, imm8: u8, flags: &mut FlagRegister) {
     flags.parity = al.count_ones() % 2 != 0;
 }
 // aad
+// FIXME: delete?
 pub fn aad_10(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
     aad(al, ah, 10, flags);
 }
@@ -97,8 +98,17 @@ pub fn aas(al: &mut u8, ah: &mut u8, flags: &mut FlagRegister) {
 }
 // adc src, dst
 pub fn adc(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
-    let src = *src + (flags.carry as u32);
+    // Add the carry flag
+    let mut src = *src;
+    add(&(flags.carry as u32), dst, flags);
+
+    // Store the result of overflow in case the increment set it
+    let over = flags.overflow;
     add(&src, dst, flags);
+
+    // Set appropriate flags
+    flags.overflow |= over;
+    flags.carry |= over;
 }
 // add src, dst
 pub fn add(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
@@ -315,7 +325,7 @@ pub fn cmpsb(esi: &mut u32, edi: &mut u32, mem: &[u8], flags: &mut FlagRegister)
     // Calculate addresses
     let src1 = *esi as usize;
     let src2 = *edi as usize;
-    
+
     // Load the values
     let src1: &u8 = unsafe{ transmute(mem[src1..(src1 + 1)].as_ptr()) };
     let src2: &u8 = unsafe{ transmute(mem[src2..(src2 + 1)].as_ptr()) };
@@ -332,7 +342,7 @@ pub fn cmpsw(esi: &mut u32, edi: &mut u32, mem: &[u8], flags: &mut FlagRegister)
     // Calculate addresses
     let src1 = *esi as usize;
     let src2 = *edi as usize;
-    
+
     // Load the values
     let src1: &u16 = unsafe{ transmute(mem[src1..(src1 + 2)].as_ptr()) };
     let src2: &u16 = unsafe{ transmute(mem[src2..(src2 + 2)].as_ptr()) };
@@ -349,7 +359,7 @@ pub fn cmpsd(esi: &mut u32, edi: &mut u32, mem: &[u8], flags: &mut FlagRegister)
     // Calculate addresses
     let src1 = *esi as usize;
     let src2 = *edi as usize;
-    
+
     // Load the values
     let src1: &u32 = unsafe{ transmute(mem[src1..(src1 + 4)].as_ptr()) };
     let src2: &u32 = unsafe{ transmute(mem[src2..(src2 + 4)].as_ptr()) };
@@ -431,10 +441,10 @@ pub fn div(src: &u32, eax: &mut u32, edx: &mut u32, flags: &mut FlagRegister) {
 pub fn enter(size: u32, nesting: u32, ebp: &mut u32, esp: &mut u32, mem: &mut [u8]) {
     let nesting = nesting % 32;
     push(ebp, esp, mem);
-    let mut temp = *esp;
+    let temp = *esp;
 
     if nesting > 0 {
-        for i in 1..nesting {
+        for _ in 1..nesting {
             *ebp -= 4;
             push(ebp, esp, mem);
         }
@@ -478,7 +488,7 @@ pub fn imul(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let isrc = isrc as i64;
     let idst: i32 = unsafe{ transmute(*dst) };
     let idst = idst as i64;
-    
+
     // Perform multiplication
     let res = isrc * idst;
     *dst = unsafe{ transmute(res as i32) };
@@ -495,7 +505,7 @@ pub fn imul_trip(src1: &u32, src2: &u32, dst: &mut u32, flags: &mut FlagRegister
     let isrc1 = isrc1 as i64;
     let isrc2: i32 = unsafe{ transmute(*src2) };
     let isrc2 = isrc2 as i64;
-    
+
     // Perform multiplication
     let res = isrc1 * isrc2;
     *dst = unsafe{ transmute(res as i32) };
@@ -768,7 +778,7 @@ pub fn neg(dst: &mut u32, flags: &mut FlagRegister) {
 // nop
 pub fn nop() {}
 // not dst
-pub fn not(dst: &mut u32, flags: &mut FlagRegister) {
+pub fn not(dst: &mut u32) {
     *dst = !*dst;
 }
 // or src, dst
@@ -814,7 +824,7 @@ pub fn pushf(esp: &mut u32, mem: &mut [u8], flags: &mut FlagRegister) {
 pub fn rcl(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let mut count = *cnt & 0x1f;
     let mut dest = *dst;
-    
+
     while count != 0 {
         let carry = msb32(dest);
         dest = (dest << 1) + (flags.carry as u32);
@@ -825,7 +835,7 @@ pub fn rcl(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     if *cnt == 1 {
         flags.overflow = msb32(dest) ^ flags.carry;
     }
-    
+
     *dst = dest;
 }
 // rcr cnt, dst
@@ -859,7 +869,7 @@ pub fn rol(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     *dst = res;
 
     // Set appropriate flags
-    if *src == 1 {
+    if *cnt == 1 {
         flags.overflow = flags.carry ^ msb32(res);
     }
 }
@@ -869,7 +879,7 @@ pub fn ror(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     *dst = res;
 
     // Set appropriate flags
-    if *src == 1 {
+    if *cnt == 1 {
         flags.overflow = ((res & (1 << 30)) != 0) ^ msb32(res);
     }
 }
@@ -899,6 +909,7 @@ pub fn sar(cnt: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     }
 }
 // sbb src, dst
+// TODO: This probably has the same flags issue as 'adc'
 pub fn sbb(src: &u32, dst: &mut u32, flags: &mut FlagRegister) {
     let tmp = *src + (flags.carry as u32);
     sub32(&tmp, dst, flags);
@@ -1179,7 +1190,7 @@ pub fn wait() {
     fwait();
 }
 // xchg src, dst
-pub fn xchg(src: &mut u32, dst: &mut u32, flags: &FlagRegister) {
+pub fn xchg(src: &mut u32, dst: &mut u32) {
     let tmp = *src;
     *src = *dst;
     *dst = tmp;
