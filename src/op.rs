@@ -1,6 +1,7 @@
 
 use std::mem;
 use std::slice;
+use std::u8;
 
 pub struct Operand<'a> {
     loc: &'a mut[u8],
@@ -8,6 +9,8 @@ pub struct Operand<'a> {
 }
 
 // TODO: Figure out how to construct from numbers
+// TODO: Implement the trait that allows for indexing
+// TODO: Can I genericize this at all?
 #[allow(non_snake_case)]
 impl<'a> Operand<'a> {
     pub fn memory(loc: &'a mut [u8]) -> Self {
@@ -29,6 +32,7 @@ impl<'a> Operand<'a> {
     }
 
     // Fit queries
+    // FIXME: Delete ???
     pub fn isFittableT<T>(&self) -> bool {
         mem::size_of::<T>() <= self.len()
     }
@@ -52,6 +56,7 @@ impl<'a> Operand<'a> {
 
     // Value insertion
     // TODO: I have some concerns about this being used with smaller values
+    // FIXME: Delte ???
     pub fn setValue<T>(&mut self, val: &'a mut T) {
         if !self.isFittableT::<T>() {
             panic!("Attempt to set an operand from an invalid sized value");
@@ -64,6 +69,7 @@ impl<'a> Operand<'a> {
     }
 
     // Value extraction
+    // TODO: Figure out if these are all necessary
     pub fn getU8(&self) -> u8 {
         *self.iref()
     }
@@ -101,6 +107,46 @@ impl<'a> Operand<'a> {
             1 => self.getI8() as i32,
             _ => panic!("Invalid operand size")
         }
+    }
+
+    // Extension methods
+    // TODO: May need some work with i8 interface
+    pub fn sxb(&self, idx: usize) -> u8 {
+        let sign = self.getI32() < 0;
+        // println!("{:b}:{}", self.getI32(), sign);
+
+        if idx < self.len() {
+            // NOTE: The way integers are stored on my system means this line is wrong
+            // self.loc[self.len() - idx - 1]
+            self.loc[idx]
+        } else if sign {
+            u8::MAX
+        } else {
+            0
+        }
+    }
+
+    pub fn zxb(&self, idx: usize) -> u8 {
+        if idx < self.len() {
+            // self.loc[self.len() - idx - 1]
+            self.loc[idx]
+        } else {
+            0
+        }
+    }
+
+    // TODO: Work on error handling interface ???
+    pub fn at(&mut self, idx: usize) -> &mut u8 {
+        if idx < self.len() {
+            // &mut self.loc[self.len() - idx - 1]
+            &mut self.loc[idx]
+        } else {
+            panic!("Index out of bounds")
+        }
+    }
+
+    pub fn msb(&self) -> bool {
+        (self.getI32() ^ (1 << 31)) != 0
     }
 
     // Private helper functions

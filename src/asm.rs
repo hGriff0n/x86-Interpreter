@@ -63,22 +63,16 @@ pub fn aas(al: &mut Operand, ah: &mut Operand, flags: &mut FlagRegister) {
 // adc r/m16, r16
 // adc r/m32, r32
 
-// TODO: How am I going to handle different sized operands?
 pub fn adc(src: &Operand, dst: &mut Operand, flags: &mut FlagRegister) {
-    require_if!(src.origin == OpType::MEM, dst.origin == OpType::REG);
-    require_if!(src.origin != OpType::IMM, src.len() == dst.len());
+    let mut flag = flags.carry as u8;
+    let carry = Operand::from_value(&mut flag);
 
-    let carry = flags.carry as u8;
-    match dst.len() {
-        4 => {},
-        2 => {},
-        1 => {},
-        _ => panic!("Unreachable")
-    }
+    add(&carry, dst, flags);
+    add(src, dst, flags);
 }
 
 // TODO: How am I going to handle different sized operands?
-pub fn add(src: &Operand, dst: &mut Operand, flags: &mut FlagRegister) {
+pub fn a_dd(src: &Operand, dst: &mut Operand, flags: &mut FlagRegister) {
     require_if!(src.origin == OpType::MEM, dst.origin == OpType::REG);
     require_if!(src.origin != OpType::IMM, src.len() == dst.len());
 
@@ -120,6 +114,7 @@ pub fn add(src: &Operand, dst: &mut Operand, flags: &mut FlagRegister) {
 pub fn add(src: &Operand, dst: &mut Operand, flags: &mut FlagRegister) {
     require_if!(src.origin == OpType::MEM, dst.origin == OpType::REG);
     require_if!(src.origin != OpType::IMM, src.len() == dst.len());
+    require!(dst.origin != OpType::IMM);
 
     let adjust = (src.getU8() & 15u8) + (dst.getU8() & 15u8) > 15;
 
@@ -127,23 +122,62 @@ pub fn add(src: &Operand, dst: &mut Operand, flags: &mut FlagRegister) {
     for i in 0..dst.len() {
         // src.sxb(i) (sign extend if src smaller than i, returns u8)
             // also have a 'zxb' method to perform zero extension
-        // dst[i] (get Operand view on the i'th byte of dst, returns &mut u8)
-        let (res, over1) = dst[i].overflowing_add(src.sxb(i));
+        // dst.at(i) (get Operand view on the i'th byte of dst, returns &mut u8)
+        let (res, over1) = dst.at(i).overflowing_add(src.sxb(i));
         let (res, over2) = res.overflowing_add(flags.carry as u8);
-        *dst[i] = res;
+        *dst.at(i) = _res;
 
         flags.carry = over1 || over2;
     }
 
     flags.sign = dst.getI32() < 0;
     flags.zero = dst.getU32() == 0;
-    flags.parity = dstgetU8().count_ones() % 2 != 0;
+    flags.parity = dst.getU8().count_ones() % 2 != 0;
     flags.adjust = adjust;
 }
 
 // Possible problem instructions
     // mul/div, cmps* (these may be trivial actually)
-    // rotate, shift, sub
+    // rotate, shift (basically require the macro approach)
+
+// cmpsb
+pub fn cmpsb(esi: &mut Operand, edi: &mut Operand, mem: &[u8], flags: &mut FlagRegister) {
+
+}
+
+// imul src, dst
+pub fn imul(src: &Operand, dst: &mut Operand, flags: &mut FlagRegister) {
+
+}
+
+// div src
+pub fn div(src: &Operand, eax: &mut Operand, edx: &mut Operand, flags: &mut FlagRegister) {
+    require!(eax.len() == 4);
+    require!(edx.len() == 4);
+}
+
+// sub src, dst
+pub fn sub(src: &Operand, dst: &mut Operand, flags: &mut FlagRegister) {
+    require_if!(src.origin == OpType::MEM, dst.origin == OpType::REG);
+    require_if!(src.origin != OpType::IMM, src.len() == dst.len());
+    require!(dst.origin != OpType::IMM);
+
+    let (_, adjust) = (dst.getU8() & 15u8).overflowing_sub(src.getU8() & 15u8);
+
+    flags.carry = false;
+    for i in 0..dst.len() {
+        let (res, over1) = dst.at(i).overflowing_sub(flags.carry as u8);
+        let (res, over2) = res.overflowing_sub(src.sxb(i));
+        *dst.at(i) = res;
+
+        flags.carry = over1 || over2;
+    }
+
+    flags.sign = dst.getI32() < 0;
+    flags.zero = dst.getU32() == 0;
+    flags.parity = dst.getU8().count_ones() % 2 != 0;
+    flags.adjust = adjust;
+}
 
 // TODO: How am I going to handle different sized operands?
 pub fn and(src: &Operand, dst: &mut Operand, flags: &mut FlagRegister) {
